@@ -80,7 +80,7 @@ else:
                 client = gspread.authorize(creds)
                 
                 # 3. 내 구글 드라이브에 있는 시트 파일 열기 (이름이 일치해야 합니다!)
-                sheet = client.open("수령기록부").sheet1
+                sheet = client.open("수령 목록82").sheet1
                 
                 # 4. 시트의 가장 아래쪽 빈 줄에 [시간, 아이디] 순서로 데이터 밀어넣기
                 sheet.append_row([current_time, user_id])
