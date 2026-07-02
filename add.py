@@ -1,6 +1,15 @@
 import streamlit as st
 from datetime import datetime
 
+# 스트림릿 기본 상/하단 디자인 숨기기
+hide_streamlit_style = """
+<style>
+header {visibility: hidden;} /* 상단 Fork, 깃허브 로고 및 햄버거 메뉴 숨기기 */
+footer {visibility: hidden;} /* 하단 스트림릿 워터마크 로고 숨기기 */
+</style>
+"""
+
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # 0. 모바일 화면에 최적화되도록 앱 페이지 설정
 st.set_page_config(page_title="사내 수령 기록 시스템", page_icon="📦", layout="centered")
 
@@ -16,7 +25,7 @@ if not st.session_state['logged_in']:
     # 1. 상단 이미지/아이콘 자리 (나중에 이미지 파일로 교체 가능)
     # 이미지 파일이 준비되면 아래 주석(#)을 풀고 파일명을 적어주면 됩니다.
     # st.image("your_logo.png", width=120)
-    st.markdown("<h3 style='text-align: center; color: #4A5568;'>🏢 사내 시스템</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: #4A5568;'>82창 순회작업 기록 시스템</h3>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #718096; font-size: 14px;'>[여기에 추후 로고 아이콘 이미지가 들어갑니다]</p>", unsafe_allow_html=True)
     st.write("---") # 구분선
     
