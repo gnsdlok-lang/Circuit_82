@@ -122,7 +122,7 @@ else:
     if st.button("📢 수령 처리하기", use_container_width=True):
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        with st.spinner('구글 스프레드시트에 기록 중입니다...'):
+        with st.spinner('수령처리중입니다...'):
             try:
                 client = get_google_client()
                 record_sheet = client.open("수령 목록82").worksheet("기록내용")
