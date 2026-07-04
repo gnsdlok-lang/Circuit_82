@@ -1,9 +1,11 @@
 import streamlit as st
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import gspread
 from google.oauth2.service_account import Credentials
 import json
 import hashlib 
+
+KST = timezone(timedelta(hours=9))
 
 # 0. 앱 페이지 기본 설정 및 디자인 숨기기
 st.set_page_config(page_title="사내 수령 기록 시스템", page_icon="📦", layout="centered")
@@ -91,11 +93,11 @@ if not st.session_state['logged_in']:
     st.write("") 
     
     if st.button("로그인", use_container_width=True, type="primary"):
-        if st.session_state['lockout_until'] and datetime.now() < st.session_state['lockout_until']:
-            remain_seconds = int((st.session_state['lockout_until'] - datetime.now()).total_seconds())
+        if st.session_state['lockout_until'] and datetime.now(kst) < st.session_state['lockout_until']:
+            remain_seconds = int((st.session_state['lockout_until'] - datetime.now(kst)).total_seconds())
             st.error(f"🚨 5회 연속 실패로 로그인이 차단되었습니다. {remain_seconds}초 후에 다시 시도해 주세요.")
         else:
-            if st.session_state['lockout_until'] and datetime.now() >= st.session_state['lockout_until']:
+            if st.session_state['lockout_until'] and datetime.now(kst) >= st.session_state['lockout_until']:
                 st.session_state['login_attempts'] = 0
                 st.session_state['lockout_until'] = None
             
@@ -127,7 +129,7 @@ if not st.session_state['logged_in']:
                         else:
                             st.session_state['login_attempts'] += 1
                             if st.session_state['login_attempts'] >= 5:
-                                st.session_state['lockout_until'] = datetime.now() + timedelta(minutes=3)
+                                st.session_state['lockout_until'] = datetime.now(kst) + timedelta(minutes=3)
                                 st.error("🚨 5회 연속 로그인 실패로 3분간 로그인이 차단됩니다.")
                             else:
                                 st.error(f"아이디 또는 비밀번호가 일치하지 않습니다. (실패 횟수: {st.session_state['login_attempts']}/5)")
@@ -158,7 +160,7 @@ else:
         st.write("")
         
         if st.button("📢 수령 처리하기", use_container_width=True):
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            current_time = datetime.now(kst).strftime("%Y-%m-%d %H:%M:%S")
             
             with st.spinner('구글 스프레드시트에 기록 중입니다...'):
                 try:
