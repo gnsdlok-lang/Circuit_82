@@ -15,26 +15,29 @@ KST = timezone(timedelta(hours=9))
 # ==========================================
 st.set_page_config(page_title="사내 수령 기록 시스템", page_icon="📦", layout="centered")
 
-# 전역 CSS: st-rsuite 달력 팝업을 최상위로
 st.markdown("""
 <style>
+/* Streamlit dialog와 backdrop z-index를 낮춰서 커스텀 팝업이 위로 올라올 수 있게 함 */
+[data-testid="stDialog"] {
+    z-index: 1000 !important;
+}
+[data-testid="stDialogBackdrop"] {
+    z-index: 999 !important;
+}
+
+/* st-rsuites / rsuite 캘린더 팝업을 최상위로 강제 */
 .rs-picker-popup,
 .rs-picker-date-popup,
 .rs-overlay,
 div[class*="rs-picker-popup"],
-body > div[class*="rs-picker"] {
+body > div[class*="rs-picker"],
+[class*="rsuite"] [class*="picker"] {
     z-index: 2147483647 !important;
+    position: fixed !important;
+    pointer-events: auto !important;
 }
 </style>
 """, unsafe_allow_html=True)
-
-hide_streamlit_style = """
-<style>
-header {visibility: hidden;}
-footer {visibility: hidden;}
-</style>
-"""
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 # ==========================================
 # 1. 구글 스프레드시트 연결 및 유틸 함수
@@ -88,24 +91,6 @@ def confirm_password_change(new_pw):
             st.rerun()
 @st.dialog("입고생성")
 def dialog_create_request():
-    # dialog z-index를 낮추고 달력 팝업을 앞으로 보내는 CSS
-    st.markdown("""
-    <style>
-    /* dialog 자체 z-index 낮춤 */
-    [data-testid="stDialog"] {
-        z-index: 1000 !important;
-    }
-    
-    /* st-rsuite 달력 팝업은 최대 z-index */
-    .rs-picker-popup,
-    .rs-picker-date-popup,
-    .rs-overlay,
-    div[class*="rs-picker-popup"],
-    body > div[class*="rs-picker"] {
-        z-index: 2147483647 !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
 
     st.subheader("새로운 입고 의뢰 작성")
    
