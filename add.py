@@ -5,6 +5,8 @@ import gspread
 from google.oauth2.service_account import Credentials
 import json
 import hashlib 
+from st_rsuite import date_picker
+from datetime import date
 
 KST = timezone(timedelta(hours=9))
 
@@ -79,7 +81,7 @@ def dialog_create_request():
     factory_list = ["기체공장", "기관공장", "부품공장", "제작공장", "성능공장"]
     selected_factory = st.selectbox("공장", factory_list)
 
-    # 부서 목록 (캐싱 추천)
+    # 부서 목록 (기존 코드 유지)
     client = get_google_client()
     dept_sheet = client.open("수령 목록82").worksheet("부서")
     dept_data = dept_sheet.get_all_values()
@@ -92,54 +94,17 @@ def dialog_create_request():
     serial_num = st.text_input("일련번호")
 
     # ==========================================
-    # 📆 요구일자 - 아이콘 클릭 → 달력 팝업 방식
+    # 📆 요구일자 - st-rsuite 달력 사용
     # ==========================================
     st.markdown("**📆 요구일자**")
-
-    # 세션에 선택된 날짜 저장 (dialog 안에서도 유지되게)
-    if "req_date" not in st.session_state:
-        st.session_state.req_date = datetime.now(KST).date()
-
-    # 현재 선택된 날짜 표시 + 달력 버튼
-    col1, col2 = st.columns([3, 1])
     
-    with col1:
-        # 선택된 날짜를 예쁘게 보여줌 (읽기 전용)
-        st.text_input(
-            "선택된 날짜",
-            value=st.session_state.req_date.strftime("%Y/%m/%d"),
-            disabled=True,
-            label_visibility="collapsed"
-        )
-    
-    with col2:
-        # 📅 아이콘 버튼
-        if st.button("📅", use_container_width=True, key="cal_icon"):
-            # popover를 열기 위한 플래그
-            st.session_state.show_calendar = True
-
-    # 📅 버튼을 누르면 popover로 달력 열기
-    if st.session_state.get("show_calendar", False):
-        with st.popover("📅 날짜 선택", use_container_width=True):
-            picked_date = st.date_input(
-                "요구일자",
-                value=st.session_state.req_date,
-                format="YYYY/MM/DD",
-                label_visibility="collapsed"
-            )
-            
-            col_a, col_b = st.columns(2)
-            with col_a:
-                if st.button("선택 완료", use_container_width=True, type="primary"):
-                    st.session_state.req_date = picked_date
-                    st.session_state.show_calendar = False
-                    st.rerun()
-            with col_b:
-                if st.button("취소", use_container_width=True):
-                    st.session_state.show_calendar = False
-                    st.rerun()
-
-    req_date_str = st.session_state.req_date.strftime("%Y-%m-%d")
+    req_date = date_picker(
+        label="요구일자 선택",
+        value=date.today(),
+        key="req_date_picker",
+        one_tap=True,           # 한 번 클릭으로 선택 가능하게
+    )
+    req_date_str = req_date.strftime("%Y-%m-%d")
 
     st.write("---")
 
@@ -150,6 +115,7 @@ def dialog_create_request():
                 st.warning("품명과 일련번호를 입력해주세요.")
             else:
                 with st.spinner("기록 중..."):
+                    # 기존 입고 생성 로직 그대로 사용
                     client = get_google_client()
                     board_sheet = client.open("수령 목록82").worksheet("상황판")
                     
@@ -166,20 +132,12 @@ def dialog_create_request():
                     ]
                     board_sheet.append_row(new_row)
                     st.success("입고 생성이 완료되었습니다.")
-                    # dialog 닫을 때 세션 정리
-                    if "show_calendar" in st.session_state:
-                        del st.session_state.show_calendar
-                    if "req_date" in st.session_state:
-                        del st.session_state.req_date
                     st.rerun()
     
     with col2:
         if st.button("뒤로가기", use_container_width=True):
-            if "show_calendar" in st.session_state:
-                del st.session_state.show_calendar
-            if "req_date" in st.session_state:
-                del st.session_state.req_date
             st.rerun()
+
 
 @st.dialog("입고 확인")
 def dialog_confirm_inbound(sheet_row_idx):
