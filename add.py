@@ -75,33 +75,74 @@ def confirm_password_change(new_pw):
 @st.dialog("입고생성")
 def dialog_create_request():
     st.subheader("새로운 입고 의뢰 작성")
+    
     factory_list = ["기체공장", "기관공장", "부품공장", "제작공장", "성능공장"]
     selected_factory = st.selectbox("공장", factory_list)
-    
-    # "부서" 시트에서 데이터 가져오기
+
+    # 부서 목록 (캐싱 추천)
     client = get_google_client()
     dept_sheet = client.open("수령 목록82").worksheet("부서")
     dept_data = dept_sheet.get_all_values()
-    
-    # 선택한 공장에 맞는 부서 필터링
     valid_depts = [row[1] for row in dept_data if len(row) > 1 and row[0] == selected_factory]
     if not valid_depts:
         valid_depts = ["부서 정보 없음"]
-        
     selected_dept = st.selectbox("부서", valid_depts)
+
     item_name = st.text_input("품명")
     serial_num = st.text_input("일련번호")
+
+    # ==========================================
+    # 📆 요구일자 - 아이콘 클릭 → 달력 팝업 방식
+    # ==========================================
+    st.markdown("**📆 요구일자**")
+
+    # 세션에 선택된 날짜 저장 (dialog 안에서도 유지되게)
+    if "req_date" not in st.session_state:
+        st.session_state.req_date = datetime.now(KST).date()
+
+    # 현재 선택된 날짜 표시 + 달력 버튼
+    col1, col2 = st.columns([3, 1])
     
-    # 📱 요구일자 선택 (가장 안정적인 Streamlit 공식 달력 활용)
-    req_date = st.date_input(
-        "📆 요구일자 선택", 
-        value=datetime.now(KST).date(),
-        format="YYYY/MM/DD", 
-        help="터치하여 날짜를 선택하세요."
-    )
-    req_date_str = req_date.strftime("%Y-%m-%d")
+    with col1:
+        # 선택된 날짜를 예쁘게 보여줌 (읽기 전용)
+        st.text_input(
+            "선택된 날짜",
+            value=st.session_state.req_date.strftime("%Y/%m/%d"),
+            disabled=True,
+            label_visibility="collapsed"
+        )
     
+    with col2:
+        # 📅 아이콘 버튼
+        if st.button("📅", use_container_width=True, key="cal_icon"):
+            # popover를 열기 위한 플래그
+            st.session_state.show_calendar = True
+
+    # 📅 버튼을 누르면 popover로 달력 열기
+    if st.session_state.get("show_calendar", False):
+        with st.popover("📅 날짜 선택", use_container_width=True):
+            picked_date = st.date_input(
+                "요구일자",
+                value=st.session_state.req_date,
+                format="YYYY/MM/DD",
+                label_visibility="collapsed"
+            )
+            
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("선택 완료", use_container_width=True, type="primary"):
+                    st.session_state.req_date = picked_date
+                    st.session_state.show_calendar = False
+                    st.rerun()
+            with col_b:
+                if st.button("취소", use_container_width=True):
+                    st.session_state.show_calendar = False
+                    st.rerun()
+
+    req_date_str = st.session_state.req_date.strftime("%Y-%m-%d")
+
     st.write("---")
+
     col1, col2 = st.columns(2)
     with col1:
         if st.button("확인", use_container_width=True, type="primary"):
@@ -109,26 +150,35 @@ def dialog_create_request():
                 st.warning("품명과 일련번호를 입력해주세요.")
             else:
                 with st.spinner("기록 중..."):
+                    client = get_google_client()
                     board_sheet = client.open("수령 목록82").worksheet("상황판")
                     
-                    # 순번 계산 (행 개수 기반)
                     row_count = len(board_sheet.col_values(1))
                     next_seq = row_count if row_count > 0 else 1
                     
-                    # 수집된 날짜 문자열(YYYY-MM-DD)에 " 13:00" 고정 문자열 결합
                     req_datetime_str = f"{req_date_str} 13:00"
                     current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
                     
                     new_row = [
-                        next_seq, selected_factory, selected_dept, item_name, 
-                        st.session_state['user_name'], serial_num, 1, 
+                        next_seq, selected_factory, selected_dept, item_name,
+                        st.session_state['user_name'], serial_num, 1,
                         current_time_str, req_datetime_str, "", "", ""
                     ]
                     board_sheet.append_row(new_row)
                     st.success("입고 생성이 완료되었습니다.")
+                    # dialog 닫을 때 세션 정리
+                    if "show_calendar" in st.session_state:
+                        del st.session_state.show_calendar
+                    if "req_date" in st.session_state:
+                        del st.session_state.req_date
                     st.rerun()
+    
     with col2:
         if st.button("뒤로가기", use_container_width=True):
+            if "show_calendar" in st.session_state:
+                del st.session_state.show_calendar
+            if "req_date" in st.session_state:
+                del st.session_state.req_date
             st.rerun()
 
 @st.dialog("입고 확인")
