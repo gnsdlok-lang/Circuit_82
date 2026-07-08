@@ -71,6 +71,7 @@ def confirm_password_change(new_pw):
     with col2:
         if st.button("취소", use_container_width=True):
             st.rerun()
+
 @st.dialog("입고생성")
 def dialog_create_request():
     st.subheader("새로운 입고 의뢰 작성")
@@ -91,8 +92,14 @@ def dialog_create_request():
     item_name = st.text_input("품명")
     serial_num = st.text_input("일련번호")
     
-    # 📅 누르면 달력이 뜨는 입력창 (기본값: 오늘 날짜)
-    req_date = st.date_input("요구일자", help="터치하면 달력이 나타납니다.")
+    # 📱 요구일자 선택 (가장 안정적인 Streamlit 공식 달력 활용)
+    req_date = st.date_input(
+        "📆 요구일자 선택", 
+        value=datetime.now(KST).date(),
+        format="YYYY/MM/DD", 
+        help="터치하여 날짜를 선택하세요."
+    )
+    req_date_str = req_date.strftime("%Y-%m-%d")
     
     st.write("---")
     col1, col2 = st.columns(2)
@@ -108,8 +115,8 @@ def dialog_create_request():
                     row_count = len(board_sheet.col_values(1))
                     next_seq = row_count if row_count > 0 else 1
                     
-                    # 사용자가 달력에서 선택한 날짜에 " 13:00" 고정 문자열 결합
-                    req_datetime_str = f"{req_date.strftime('%Y-%m-%d')} 13:00"
+                    # 수집된 날짜 문자열(YYYY-MM-DD)에 " 13:00" 고정 문자열 결합
+                    req_datetime_str = f"{req_date_str} 13:00"
                     current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
                     
                     new_row = [
@@ -123,9 +130,6 @@ def dialog_create_request():
     with col2:
         if st.button("뒤로가기", use_container_width=True):
             st.rerun()
-
-@st.dialog("입고생성")
-
 
 @st.dialog("입고 확인")
 def dialog_confirm_inbound(sheet_row_idx):
@@ -238,13 +242,14 @@ if not st.session_state['logged_in']:
                         
                         login_success = False
                         for row in data[1:]:
+                            # 올바른 인덱스 적용: B열(1), C열(2), D열(3), E열(4)
                             if len(row) >= 4:
                                 hashed_input_pw = make_hash(user_pw)
                                 if str(row[1]) == str(user_id) and str(row[2]) == str(hashed_input_pw):
                                     st.session_state['logged_in'] = True
-                                    st.session_state['user_id'] = str(row[1])     # B열 (아이디)
-                                    st.session_state['user_name'] = str(row[3])   # D열 (이름)
-                                    st.session_state['user_level'] = str(row[4])  # E열 (권한 레벨)
+                                    st.session_state['user_id'] = str(row[1])
+                                    st.session_state['user_name'] = str(row[3])
+                                    st.session_state['user_level'] = str(row[4])
                                     st.session_state['page'] = 'main'
                                     login_success = True
                                     break 
@@ -336,7 +341,7 @@ else:
             display_cols = df_display.iloc[:, [2, 3, 5, 6]] # 부서, 품명, 일련번호, 상태 (0-indexed)
             display_cols.columns = ["부서", "품명", "일련번호", "상태"]
             
-            # DataFrame 표출 (라디오 단추 대신 행 자체를 선택하게 만듦)
+            # DataFrame 표출 (라디오 단추 대신 행 자체를 터치하여 선택하게 만듦)
             event = st.dataframe(
                 display_cols,
                 use_container_width=True,
@@ -363,7 +368,7 @@ else:
         with c2:
             if st.button("입고", use_container_width=True):
                 if len(selected_indices) == 0:
-                    st.warning("항목을 선택하세요.")
+                    st.warning("표에서 항목을 먼저 선택하세요.")
                 else:
                     selected_row = df_display.iloc[selected_indices[0]]
                     if str(selected_row['상태']) == '1':
@@ -374,7 +379,7 @@ else:
         with c3:
             if st.button("수령", use_container_width=True):
                 if len(selected_indices) == 0:
-                    st.warning("항목을 선택하세요.")
+                    st.warning("표에서 항목을 먼저 선택하세요.")
                 else:
                     selected_row = df_display.iloc[selected_indices[0]]
                     if str(selected_row['상태']) == '4':
@@ -385,7 +390,7 @@ else:
         with c4:
             if st.button("상태확인", use_container_width=True):
                 if len(selected_indices) == 0:
-                    st.warning("항목을 선택하세요.")
+                    st.warning("표에서 항목을 먼저 선택하세요.")
                 else:
                     selected_row = df_display.iloc[selected_indices[0]]
                     idx_in_raw = int(selected_row['sheet_row_idx']) - 1 # 리스트 인덱스 (0-indexed, 헤더 포함)
