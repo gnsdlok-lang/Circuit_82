@@ -13,14 +13,24 @@ KST = timezone(timedelta(hours=9))
 # ==========================================
 st.set_page_config(page_title="사내 수령 기록 시스템", page_icon="📦", layout="centered")
 
-hide_streamlit_style = """
+# 기존에 헤더/푸터만 숨기던 CSS에 달력 레이어(z-index) 강제 상승 코드 추가!
+custom_css = """
 <style>
 header {visibility: hidden;}
 footer {visibility: hidden;}
+
+/* Streamlit 달력 팝업(Popover) 레이어를 다이얼로그(Dialog) 창 위로 강제로 끌어올림 */
+div[data-baseweb="popover"] {
+    z-index: 999999 !important;
+}
+
+/* 달력 위젯 자체의 우선순위도 최상단으로 설정 */
+div[data-baseweb="calendar"] {
+    z-index: 999999 !important;
+}
 </style>
 """
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
-
+st.markdown(custom_css, unsafe_allow_html=True)
 # ==========================================
 # 1. 구글 스프레드시트 연결 및 유틸 함수
 # ==========================================
