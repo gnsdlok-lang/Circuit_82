@@ -5,7 +5,6 @@ import gspread
 from google.oauth2.service_account import Credentials
 import json
 import hashlib 
-from st_rsuite import date_picker
 from datetime import date
 
 KST = timezone(timedelta(hours=9))
@@ -89,76 +88,91 @@ def confirm_password_change(new_pw):
     with col2:
         if st.button("취소", use_container_width=True):
             st.rerun()
+            
 @st.dialog("입고생성")
 def dialog_create_request():
-
     st.subheader("새로운 입고 의뢰 작성")
-   
-    factory_list = ["기체공장", "기관공장", "부품공장", "제작공장", "성능공장"]
-    selected_factory = st.selectbox("공장", factory_list)
+    st.write("")
 
-    client = get_google_client()
-    dept_sheet = client.open("수령 목록82").worksheet("부서")
-    dept_data = dept_sheet.get_all_values()
-    valid_depts = [row[1] for row in dept_data if len(row) > 1 and row[0] == selected_factory]
+    # 공장 선택
+    factory_list = ["기체공장", "기관공장", "부품공장", "제작공장", "성능공장"]
+    selected_factory = st.selectbox("공장", factory_list, key="create_factory")
+
+    # 부서 로딩 (공장 선택에 따라)
+    try:
+        client = get_google_client()
+        dept_sheet = client.open("수령 목록82").worksheet("부서")
+        dept_data = dept_sheet.get_all_values()
+        valid_depts = [row[1] for row in dept_data if len(row) > 1 and row[0] == selected_factory]
+    except Exception as e:
+        st.error(f"부서 정보를 불러오는데 실패했습니다: {e}")
+        valid_depts = ["부서 정보 없음"]
+
     if not valid_depts:
         valid_depts = ["부서 정보 없음"]
-    selected_dept = st.selectbox("부서", valid_depts)
 
-    item_name = st.text_input("품명")
-    serial_num = st.text_input("일련번호")
+    selected_dept = st.selectbox("부서", valid_depts, key="create_dept")
 
-    # 📆 요구일자 - st-rsuite
+    # 품명 / 일련번호
+    item_name = st.text_input("품명", key="create_item_name", placeholder="품명을 입력하세요")
+    serial_num = st.text_input("일련번호", key="create_serial", placeholder="일련번호를 입력하세요")
+
+    st.write("")
+
+    # 📆 요구일자 - 네이티브 date_input 사용
     st.markdown("**📆 요구일자**")
-   
-    picked = date_picker(
-        label="요구일자 선택",
+    req_date = st.date_input(
+        label="요구일자",
         value=date.today(),
-        key="req_date_picker",
-        one_tap=True,
+        key="req_date",
+        label_visibility="collapsed"
     )
-
-    # 안전하게 date 객체로 변환
-    if picked is None:
-        req_date = date.today()
-    elif isinstance(picked, str):
-        req_date = datetime.strptime(picked, "%Y-%m-%d").date()
-    elif isinstance(picked, datetime):
-        req_date = picked.date()
-    else:
-        req_date = picked
-
     req_date_str = req_date.strftime("%Y-%m-%d")
 
     st.write("---")
 
+    # 버튼 영역
     col1, col2 = st.columns(2)
+
     with col1:
-        if st.button("확인", use_container_width=True, type="primary"):
-            if not item_name or not serial_num:
-                st.warning("품명과 일련번호를 입력해주세요.")
+        if st.button("확인", use_container_width=True, type="primary", key="create_confirm"):
+            if not item_name.strip() or not serial_num.strip():
+                st.warning("품명과 일련번호를 모두 입력해주세요.")
             else:
-                with st.spinner("기록 중..."):
-                    client = get_google_client()
-                    board_sheet = client.open("수령 목록82").worksheet("상황판")
-                   
-                    row_count = len(board_sheet.col_values(1))
-                    next_seq = row_count if row_count > 0 else 1
-                   
-                    req_datetime_str = f"{req_date_str} 13:00"
-                    current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-                   
-                    new_row = [
-                        next_seq, selected_factory, selected_dept, item_name,
-                        st.session_state['user_name'], serial_num, 1,
-                        current_time_str, req_datetime_str, "", "", ""
-                    ]
-                    board_sheet.append_row(new_row)
-                    st.success("입고 생성이 완료되었습니다.")
-                    st.rerun()
-   
+                with st.spinner("입고 의뢰를 등록 중입니다..."):
+                    try:
+                        client = get_google_client()
+                        board_sheet = client.open("수령 목록82").worksheet("상황판")
+
+                        # 다음 순번 계산
+                        row_count = len(board_sheet.col_values(1))
+                        next_seq = row_count if row_count > 0 else 1
+
+                        req_datetime_str = f"{req_date_str} 13:00"
+                        current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+
+                        new_row = [
+                            next_seq,
+                            selected_factory,
+                            selected_dept,
+                            item_name.strip(),
+                            st.session_state.get('user_name', ''),
+                            serial_num.strip(),
+                            1,                    # 상태: 1 (의뢰)
+                            current_time_str,
+                            req_datetime_str,
+                            "", "", ""
+                        ]
+
+                        board_sheet.append_row(new_row)
+                        st.success("입고 의뢰가 성공적으로 등록되었습니다!")
+                        st.rerun()
+
+                    except Exception as e:
+                        st.error(f"등록 중 오류가 발생했습니다: {e}")
+
     with col2:
-        if st.button("뒤로가기", use_container_width=True):
+        if st.button("뒤로가기", use_container_width=True, key="create_cancel"):
             st.rerun()
             
 @st.dialog("입고 확인")
