@@ -15,12 +15,9 @@ KST = timezone(timedelta(hours=9))
 # ==========================================
 st.set_page_config(page_title="사내 수령 기록 시스템", page_icon="📦", layout="centered")
 
-# ==========================================
-# 달력 팝업 z-index 강제 상승 (전역)
-
+# 전역 CSS: st-rsuite 달력 팝업을 최상위로
 st.markdown("""
 <style>
-/* st-rsuite 달력 팝업 최상위로 */
 .rs-picker-popup,
 .rs-picker-date-popup,
 .rs-overlay,
@@ -28,15 +25,9 @@ div[class*="rs-picker-popup"],
 body > div[class*="rs-picker"] {
     z-index: 2147483647 !important;
 }
-
-/* dialog 안에서도 팝업이 앞에 오게 */
-[data-testid="stDialog"] .rs-picker-popup,
-[data-testid="stDialog"] div[class*="rs-picker-popup"] {
-    z-index: 2147483647 !important;
-}
 </style>
 """, unsafe_allow_html=True)
-# ==========================================
+
 hide_streamlit_style = """
 <style>
 header {visibility: hidden;}
@@ -98,8 +89,27 @@ def confirm_password_change(new_pw):
 
 @st.dialog("입고생성")
 def dialog_create_request():
-    st.subheader("새로운 입고 의뢰 작성")
+    # dialog z-index를 낮추고 달력 팝업을 앞으로 보내는 CSS
+    st.markdown("""
+    <style>
+    /* dialog 자체 z-index 낮춤 */
+    [data-testid="stDialog"] {
+        z-index: 1000 !important;
+    }
     
+    /* st-rsuite 달력 팝업은 최대 z-index */
+    .rs-picker-popup,
+    .rs-picker-date-popup,
+    .rs-overlay,
+    div[class*="rs-picker-popup"],
+    body > div[class*="rs-picker"] {
+        z-index: 2147483647 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.subheader("새로운 입고 의뢰 작성")
+   
     factory_list = ["기체공장", "기관공장", "부품공장", "제작공장", "성능공장"]
     selected_factory = st.selectbox("공장", factory_list)
 
@@ -114,11 +124,9 @@ def dialog_create_request():
     item_name = st.text_input("품명")
     serial_num = st.text_input("일련번호")
 
-    # ==========================================
-    # 📆 요구일자 - st-rsuite (안전하게 처리)
-    # ==========================================
+    # 📆 요구일자 - st-rsuite
     st.markdown("**📆 요구일자**")
-    
+   
     picked = date_picker(
         label="요구일자 선택",
         value=date.today(),
@@ -134,7 +142,7 @@ def dialog_create_request():
     elif isinstance(picked, datetime):
         req_date = picked.date()
     else:
-        req_date = picked  # datetime.date일 경우
+        req_date = picked
 
     req_date_str = req_date.strftime("%Y-%m-%d")
 
@@ -149,13 +157,13 @@ def dialog_create_request():
                 with st.spinner("기록 중..."):
                     client = get_google_client()
                     board_sheet = client.open("수령 목록82").worksheet("상황판")
-                    
+                   
                     row_count = len(board_sheet.col_values(1))
                     next_seq = row_count if row_count > 0 else 1
-                    
+                   
                     req_datetime_str = f"{req_date_str} 13:00"
                     current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-                    
+                   
                     new_row = [
                         next_seq, selected_factory, selected_dept, item_name,
                         st.session_state['user_name'], serial_num, 1,
@@ -164,11 +172,11 @@ def dialog_create_request():
                     board_sheet.append_row(new_row)
                     st.success("입고 생성이 완료되었습니다.")
                     st.rerun()
-    
+   
     with col2:
         if st.button("뒤로가기", use_container_width=True):
             st.rerun()
-
+            
 @st.dialog("입고 확인")
 def dialog_confirm_inbound(sheet_row_idx):
     st.write("정말 입고 처리하시겠습니까?")
