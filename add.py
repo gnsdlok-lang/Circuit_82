@@ -5,7 +5,6 @@ import gspread
 from google.oauth2.service_account import Credentials
 import json
 import hashlib 
-import calendar
 
 KST = timezone(timedelta(hours=9))
 
@@ -18,17 +17,6 @@ hide_streamlit_style = """
 <style>
 header {visibility: hidden;}
 footer {visibility: hidden;}
-
-/* 🔧 dialog(모달) 안에서 date_input 달력이 잘리거나 안 보이는 문제 수정 */
-div[data-testid="stDialog"] {
-    overflow: visible !important;
-}
-div[data-testid="stDialog"] > div {
-    overflow: visible !important;
-}
-div[data-baseweb="popover"] {
-    z-index: 999999 !important;
-}
 </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
@@ -104,19 +92,14 @@ def dialog_create_request():
     item_name = st.text_input("품명")
     serial_num = st.text_input("일련번호")
     
-    # 📱 요구일자 선택 (연/월/일 selectbox 방식 - dialog 안에서도 항상 정상 동작)
-    st.write("📆 요구일자 선택")
-    today = datetime.now(KST).date()
-    col_y, col_m, col_d = st.columns(3)
-    with col_y:
-        year = st.selectbox("연도", list(range(today.year, today.year + 2)), key="req_year")
-    with col_m:
-        month = st.selectbox("월", list(range(1, 13)), index=today.month - 1, key="req_month")
-    with col_d:
-        max_day = calendar.monthrange(year, month)[1]
-        default_day_index = min(today.day, max_day) - 1
-        day = st.selectbox("일", list(range(1, max_day + 1)), index=default_day_index, key="req_day")
-    req_date_str = f"{year}-{month:02d}-{day:02d}"
+    # 📱 요구일자 선택 (가장 안정적인 Streamlit 공식 달력 활용)
+    req_date = st.date_input(
+        "📆 요구일자 선택", 
+        value=datetime.now(KST).date(),
+        format="YYYY/MM/DD", 
+        help="터치하여 날짜를 선택하세요."
+    )
+    req_date_str = req_date.strftime("%Y-%m-%d")
     
     st.write("---")
     col1, col2 = st.columns(2)
