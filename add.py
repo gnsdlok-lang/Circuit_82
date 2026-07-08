@@ -88,24 +88,21 @@ def confirm_password_change(new_pw):
             st.rerun()
 @st.dialog("입고생성")
 def dialog_create_request():
+    # dialog z-index를 낮추고 달력 팝업을 앞으로 보내는 CSS
     st.markdown("""
     <style>
-    /* dialog z-index 낮춤 */
+    /* dialog 자체 z-index 낮춤 */
     [data-testid="stDialog"] {
         z-index: 1000 !important;
     }
-
-    /* 달력 팝업은 최상위 + 클릭 이벤트 강제 허용 */
+    
+    /* st-rsuite 달력 팝업은 최대 z-index */
     .rs-picker-popup,
     .rs-picker-date-popup,
-    div[class*="rs-picker-popup"] {
+    .rs-overlay,
+    div[class*="rs-picker-popup"],
+    body > div[class*="rs-picker"] {
         z-index: 2147483647 !important;
-        pointer-events: auto !important;
-    }
-
-    /* dialog 백드롭이 클릭을 막지 못하게 */
-    [data-testid="stDialog"] > div:first-child {
-        pointer-events: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
