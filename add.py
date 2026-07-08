@@ -71,14 +71,13 @@ def confirm_password_change(new_pw):
     with col2:
         if st.button("취소", use_container_width=True):
             st.rerun()
-
 @st.dialog("입고생성")
 def dialog_create_request():
     st.subheader("새로운 입고 의뢰 작성")
     factory_list = ["기체공장", "기관공장", "부품공장", "제작공장", "성능공장"]
     selected_factory = st.selectbox("공장", factory_list)
     
-    # "부서" 시트에서 데이터 가져오기 (캐싱 활용 권장)
+    # "부서" 시트에서 데이터 가져오기
     client = get_google_client()
     dept_sheet = client.open("수령 목록82").worksheet("부서")
     dept_data = dept_sheet.get_all_values()
@@ -92,8 +91,8 @@ def dialog_create_request():
     item_name = st.text_input("품명")
     serial_num = st.text_input("일련번호")
     
-    req_date = st.date_input("요구일자 (날짜)")
-    req_time = st.time_input("요구시간")
+    # 📅 누르면 달력이 뜨는 입력창 (기본값: 오늘 날짜)
+    req_date = st.date_input("요구일자", help="터치하면 달력이 나타납니다.")
     
     st.write("---")
     col1, col2 = st.columns(2)
@@ -104,11 +103,13 @@ def dialog_create_request():
             else:
                 with st.spinner("기록 중..."):
                     board_sheet = client.open("수령 목록82").worksheet("상황판")
+                    
                     # 순번 계산 (행 개수 기반)
                     row_count = len(board_sheet.col_values(1))
                     next_seq = row_count if row_count > 0 else 1
                     
-                    req_datetime_str = f"{req_date.strftime('%Y-%m-%d')} {req_time.strftime('%H:%M')}"
+                    # 사용자가 달력에서 선택한 날짜에 " 13:00" 고정 문자열 결합
+                    req_datetime_str = f"{req_date.strftime('%Y-%m-%d')} 13:00"
                     current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
                     
                     new_row = [
@@ -122,6 +123,9 @@ def dialog_create_request():
     with col2:
         if st.button("뒤로가기", use_container_width=True):
             st.rerun()
+
+@st.dialog("입고생성")
+
 
 @st.dialog("입고 확인")
 def dialog_confirm_inbound(sheet_row_idx):
