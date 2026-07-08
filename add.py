@@ -81,7 +81,6 @@ def dialog_create_request():
     factory_list = ["기체공장", "기관공장", "부품공장", "제작공장", "성능공장"]
     selected_factory = st.selectbox("공장", factory_list)
 
-    # 부서 목록 (기존 코드 유지)
     client = get_google_client()
     dept_sheet = client.open("수령 목록82").worksheet("부서")
     dept_data = dept_sheet.get_all_values()
@@ -94,16 +93,27 @@ def dialog_create_request():
     serial_num = st.text_input("일련번호")
 
     # ==========================================
-    # 📆 요구일자 - st-rsuite 달력 사용
+    # 📆 요구일자 - st-rsuite (안전하게 처리)
     # ==========================================
     st.markdown("**📆 요구일자**")
     
-    req_date = date_picker(
+    picked = date_picker(
         label="요구일자 선택",
         value=date.today(),
         key="req_date_picker",
-        one_tap=True,           # 한 번 클릭으로 선택 가능하게
+        one_tap=True,
     )
+
+    # 안전하게 date 객체로 변환
+    if picked is None:
+        req_date = date.today()
+    elif isinstance(picked, str):
+        req_date = datetime.strptime(picked, "%Y-%m-%d").date()
+    elif isinstance(picked, datetime):
+        req_date = picked.date()
+    else:
+        req_date = picked  # datetime.date일 경우
+
     req_date_str = req_date.strftime("%Y-%m-%d")
 
     st.write("---")
@@ -115,7 +125,6 @@ def dialog_create_request():
                 st.warning("품명과 일련번호를 입력해주세요.")
             else:
                 with st.spinner("기록 중..."):
-                    # 기존 입고 생성 로직 그대로 사용
                     client = get_google_client()
                     board_sheet = client.open("수령 목록82").worksheet("상황판")
                     
@@ -137,7 +146,6 @@ def dialog_create_request():
     with col2:
         if st.button("뒤로가기", use_container_width=True):
             st.rerun()
-
 
 @st.dialog("입고 확인")
 def dialog_confirm_inbound(sheet_row_idx):
