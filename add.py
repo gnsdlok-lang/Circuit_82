@@ -17,6 +17,17 @@ hide_streamlit_style = """
 <style>
 header {visibility: hidden;}
 footer {visibility: hidden;}
+
+/* 🔧 dialog(모달) 안에서 date_input 달력이 잘리거나 안 보이는 문제 수정 */
+div[data-testid="stDialog"] {
+    overflow: visible !important;
+}
+div[data-testid="stDialog"] > div {
+    overflow: visible !important;
+}
+div[data-baseweb="popover"] {
+    z-index: 999999 !important;
+}
 </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
@@ -92,7 +103,7 @@ def dialog_create_request():
     item_name = st.text_input("품명")
     serial_num = st.text_input("일련번호")
     
-    # 📱 요구일자 선택 (가장 안정적인 Streamlit 공식 달력 활용)
+    # 📱 요구일자 선택 (Streamlit 공식 달력 활용, CSS로 dialog 내부 렌더링 이슈 수정됨)
     req_date = st.date_input(
         "📆 요구일자 선택", 
         value=datetime.now(KST).date(),
