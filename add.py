@@ -236,11 +236,11 @@ if not st.session_state['logged_in']:
                         for row in data[1:]:
                             if len(row) >= 4:
                                 hashed_input_pw = make_hash(user_pw)
-                                if str(row[0]) == str(user_id) and str(row[1]) == str(hashed_input_pw):
+                                if str(row[1]) == str(user_id) and str(row[2]) == str(hashed_input_pw):
                                     st.session_state['logged_in'] = True
-                                    st.session_state['user_id'] = str(row[0])
-                                    st.session_state['user_name'] = str(row[2])
-                                    st.session_state['user_level'] = str(row[3])
+                                    st.session_state['user_id'] = str(row[1])     # B열 (아이디)
+                                    st.session_state['user_name'] = str(row[3])   # D열 (이름)
+                                    st.session_state['user_level'] = str(row[4])  # E열 (권한 레벨)
                                     st.session_state['page'] = 'main'
                                     login_success = True
                                     break 
