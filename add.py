@@ -40,7 +40,7 @@ def make_hash(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 # ==========================================
-# 2. Dialog 함수들
+# 2. Dialog 함수들 (입고생성은 제외됨)
 # ==========================================
 @st.dialog("비밀번호 최종 확인")
 def confirm_password_change(new_pw):
@@ -147,73 +147,6 @@ def dialog_status_check(row_data, sheet_row_idx):
             st.session_state.confirm_delete = False
             st.rerun()
 
-@st.dialog("새로운 입고 의뢰 작성")
-def dialog_create_inbound():
-    st.write("")
-
-    factory_list = ["기체공장", "기관공장", "부품공장", "제작공장", "성능공장"]
-    selected_factory = st.selectbox("공장", factory_list, key="create_factory")
-
-    try:
-        client = get_google_client()
-        dept_sheet = client.open("수령 목록82").worksheet("부서")
-        dept_data = dept_sheet.get_all_values()
-        valid_depts = [row[1] for row in dept_data if len(row) > 1 and row[0] == selected_factory]
-    except Exception as e:
-        st.error(f"부서 로딩 실패: {e}")
-        valid_depts = ["부서 정보 없음"]
-
-    if not valid_depts:
-        valid_depts = ["부서 정보 없음"]
-
-    selected_dept = st.selectbox("부서", valid_depts, key="create_dept")
-
-    item_name = st.text_input("품명", key="create_item", placeholder="품명을 입력하세요")
-    serial_num = st.text_input("일련번호", key="create_serial", placeholder="일련번호를 입력하세요")
-
-    st.write("")
-    req_date = st.date_input(
-        "📆 요구일자 (아래 빈칸을 클릭하여 달력에서 선택하세요)", 
-        value=None, 
-        key="req_date",
-        format="YYYY/MM/DD"  # 날짜 형식을 시각적으로 보여줍니다.
-    )
-    st.write("---")
-
-    col1_btn, col2_btn = st.columns(2)
-    with col1_btn:
-        if st.button("확인", use_container_width=True, type="primary", key="create_confirm"):
-            if not item_name.strip() or not serial_num.strip():
-                st.warning("품명과 일련번호를 입력해주세요.")
-            elif req_date is None:
-                st.warning("요구일자를 달력에서 선택해주세요.")
-            else:
-                with st.spinner("등록 중..."):
-                    try:
-                        client = get_google_client()
-                        board_sheet = client.open("수령 목록82").worksheet("상황판")
-                        row_count = len(board_sheet.col_values(1))
-                        next_seq = row_count if row_count > 0 else 1
-
-                        req_date_str = req_date.strftime("%Y-%m-%d")
-                        req_datetime_str = f"{req_date_str} 13:00"
-                        current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-
-                        new_row = [
-                            next_seq, selected_factory, selected_dept, item_name.strip(),
-                            st.session_state.get('user_name', ''), serial_num.strip(), 1,
-                            current_time_str, req_datetime_str, "", "", ""
-                        ]
-                        board_sheet.append_row(new_row)
-                        st.success("입고 생성 완료!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"에러 발생: {e}")
-
-    with col2_btn:
-        if st.button("취소", use_container_width=True, key="create_cancel"):
-            st.rerun()
-
 # ==========================================
 # 3. 세션 상태 초기화
 # ==========================================
@@ -281,9 +214,10 @@ if not st.session_state['logged_in']:
                 st.warning("아이디와 비밀번호를 모두 입력해 주세요.")
 
 # ==========================================
-# 로그인 이후 화면
+# 로그인 이후 화면 분기
 # ==========================================
 else:
+    # ------------------ 메인 메뉴 ------------------
     if st.session_state['page'] == 'main':
         level_str = "일반"
         if st.session_state['user_level'] == "2":
@@ -325,6 +259,7 @@ else:
             st.session_state['page'] = 'change_pw'
             st.rerun()
 
+    # ------------------ 상황판 화면 ------------------
     elif st.session_state['page'] == 'inbound_outbound':
         st.subheader("📦 입고/수령 상황판")
        
@@ -358,8 +293,10 @@ else:
         c1, c2, c3, c4 = st.columns(4)
        
         with c1:
+            # 💡 버튼 클릭 시 '입고생성' 페이지로 이동합니다.
             if st.button("입고생성", use_container_width=True):
-                dialog_create_inbound()
+                st.session_state['page'] = 'create_inbound'
+                st.rerun()
 
         with c2:
             if st.button("입고", use_container_width=True):
@@ -397,6 +334,77 @@ else:
             st.session_state['page'] = 'main'
             st.rerun()
 
+    # ------------------ 🆕 새로운 입고 의뢰 작성 페이지 ------------------
+    elif st.session_state['page'] == 'create_inbound':
+        st.subheader("📝 새로운 입고 의뢰 작성")
+        st.write("---")
+
+        factory_list = ["기체공장", "기관공장", "부품공장", "제작공장", "성능공장"]
+        selected_factory = st.selectbox("공장", factory_list, key="create_factory")
+
+        try:
+            client = get_google_client()
+            dept_sheet = client.open("수령 목록82").worksheet("부서")
+            dept_data = dept_sheet.get_all_values()
+            valid_depts = [row[1] for row in dept_data if len(row) > 1 and row[0] == selected_factory]
+        except Exception as e:
+            st.error(f"부서 로딩 실패: {e}")
+            valid_depts = ["부서 정보 없음"]
+
+        if not valid_depts:
+            valid_depts = ["부서 정보 없음"]
+
+        selected_dept = st.selectbox("부서", valid_depts, key="create_dept")
+
+        item_name = st.text_input("품명", key="create_item", placeholder="품명을 입력하세요")
+        serial_num = st.text_input("일련번호", key="create_serial", placeholder="일련번호를 입력하세요")
+
+        st.write("")
+        # 💡 버그 없이 완벽하게 작동하는 달력 (초기값 빈칸)
+        req_date = st.date_input("📆 요구일자 (클릭하여 선택)", value=None, format="YYYY/MM/DD")
+
+        st.write("---")
+
+        col1_btn, col2_btn = st.columns(2)
+        with col1_btn:
+            if st.button("확인", use_container_width=True, type="primary"):
+                if not item_name.strip() or not serial_num.strip():
+                    st.warning("품명과 일련번호를 입력해주세요.")
+                elif req_date is None:
+                    st.warning("요구일자를 달력에서 선택해주세요.")
+                else:
+                    with st.spinner("등록 중..."):
+                        try:
+                            client = get_google_client()
+                            board_sheet = client.open("수령 목록82").worksheet("상황판")
+                            row_count = len(board_sheet.col_values(1))
+                            next_seq = row_count if row_count > 0 else 1
+
+                            req_date_str = req_date.strftime("%Y-%m-%d")
+                            req_datetime_str = f"{req_date_str} 13:00"
+                            current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+
+                            new_row = [
+                                next_seq, selected_factory, selected_dept, item_name.strip(),
+                                st.session_state.get('user_name', ''), serial_num.strip(), 1,
+                                current_time_str, req_datetime_str, "", "", ""
+                            ]
+                            board_sheet.append_row(new_row)
+                            st.success("입고 생성 완료!")
+                            
+                            # 처리가 끝나면 상황판 화면으로 자동 복귀
+                            st.session_state['page'] = 'inbound_outbound'
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"에러 발생: {e}")
+
+        with col2_btn:
+            if st.button("취소", use_container_width=True):
+                # 취소 시에도 상황판 화면으로 복귀
+                st.session_state['page'] = 'inbound_outbound'
+                st.rerun()
+
+    # ------------------ 비밀번호 변경 화면 ------------------
     elif st.session_state['page'] == 'change_pw':
         st.title("🔐 비밀번호 변경")
         new_pw = st.text_input("재설정 비밀번호", type="password")
