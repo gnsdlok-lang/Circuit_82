@@ -12,8 +12,28 @@ KST = timezone(timedelta(hours=9))
 # ==========================================
 # 0. 앱 기본 설정
 # ==========================================
+
 st.set_page_config(page_title="사내 수령 기록 시스템", page_icon="📦", layout="centered")
 
+# Dialog 관련 기본 스타일 (필요시만 유지)
+st.markdown("""
+<style>
+[data-testid="stDialog"] {
+    z-index: 1000 !important;
+}
+[data-testid="stDialogBackdrop"] {
+    z-index: 999 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+hide_streamlit_style = """
+<style>
+header {visibility: hidden;}
+footer {visibility: hidden;}
+</style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 
 # ==========================================
