@@ -76,6 +76,26 @@ def confirm_password_change(new_pw):
 
 @st.dialog("입고생성")
 def dialog_create_request():
+    # ==========================================
+    # 달력 팝업을 앞으로 나오게 하는 CSS (z-index 강제 상승)
+    
+    st.markdown("""
+    <style>
+    /* st-rsuite 달력 팝업을 가장 앞으로 */
+    .rs-picker-popup,
+    .rs-picker-date-popup,
+    .rs-overlay,
+    .rs-picker-popup.rs-picker-popup {
+        z-index: 999999 !important;
+    }
+    
+    /* dialog 위에서도 팝업이 잘 보이게 */
+    [data-testid="stDialog"] .rs-picker-popup {
+        z-index: 999999 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    # ==========================================
     st.subheader("새로운 입고 의뢰 작성")
     
     factory_list = ["기체공장", "기관공장", "부품공장", "제작공장", "성능공장"]
