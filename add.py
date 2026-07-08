@@ -86,24 +86,26 @@ def confirm_password_change(new_pw):
     with col2:
         if st.button("취소", use_container_width=True):
             st.rerun()
-
 @st.dialog("입고생성")
 def dialog_create_request():
-    # dialog z-index를 낮추고 달력 팝업을 앞으로 보내는 CSS
     st.markdown("""
     <style>
-    /* dialog 자체 z-index 낮춤 */
+    /* dialog z-index 낮춤 */
     [data-testid="stDialog"] {
         z-index: 1000 !important;
     }
-    
-    /* st-rsuite 달력 팝업은 최대 z-index */
+
+    /* 달력 팝업은 최상위 + 클릭 이벤트 강제 허용 */
     .rs-picker-popup,
     .rs-picker-date-popup,
-    .rs-overlay,
-    div[class*="rs-picker-popup"],
-    body > div[class*="rs-picker"] {
+    div[class*="rs-picker-popup"] {
         z-index: 2147483647 !important;
+        pointer-events: auto !important;
+    }
+
+    /* dialog 백드롭이 클릭을 막지 못하게 */
+    [data-testid="stDialog"] > div:first-child {
+        pointer-events: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
