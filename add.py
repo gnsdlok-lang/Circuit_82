@@ -42,6 +42,67 @@ def make_hash(password):
 # ==========================================
 # 2. Dialog 함수들
 # ==========================================
+@st.dialog("새로운 입고 의뢰 작성")
+def dialog_create_inbound():
+    st.write("")
+
+    factory_list = ["기체공장", "기관공장", "부품공장", "제작공장", "성능공장"]
+    selected_factory = st.selectbox("공장", factory_list, key="create_factory")
+
+    try:
+        client = get_google_client()
+        dept_sheet = client.open("수령 목록82").worksheet("부서")
+        dept_data = dept_sheet.get_all_values()
+        valid_depts = [row[1] for row in dept_data if len(row) > 1 and row[0] == selected_factory]
+    except Exception as e:
+        st.error(f"부서 로딩 실패: {e}")
+        valid_depts = ["부서 정보 없음"]
+
+    if not valid_depts:
+        valid_depts = ["부서 정보 없음"]
+
+    selected_dept = st.selectbox("부서", valid_depts, key="create_dept")
+
+    item_name = st.text_input("품명", key="create_item", placeholder="품명을 입력하세요")
+    serial_num = st.text_input("일련번호", key="create_serial", placeholder="일련번호를 입력하세요")
+
+    st.write("")
+    st.markdown("**📆 요구일자**")
+    req_date = st.date_input("요구일자", value=date.today(), key="req_date", label_visibility="collapsed")
+    req_date_str = req_date.strftime("%Y-%m-%d")
+
+    st.write("---")
+
+    col1_btn, col2_btn = st.columns(2)
+    with col1_btn:
+        if st.button("확인", use_container_width=True, type="primary", key="create_confirm"):
+            if not item_name.strip() or not serial_num.strip():
+                st.warning("품명과 일련번호를 입력해주세요.")
+            else:
+                with st.spinner("등록 중..."):
+                    try:
+                        client = get_google_client()
+                        board_sheet = client.open("수령 목록82").worksheet("상황판")
+                        row_count = len(board_sheet.col_values(1))
+                        next_seq = row_count if row_count > 0 else 1
+
+                        req_datetime_str = f"{req_date_str} 13:00"
+                        current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+
+                        new_row = [
+                            next_seq, selected_factory, selected_dept, item_name.strip(),
+                            st.session_state.get('user_name', ''), serial_num.strip(), 1,
+                            current_time_str, req_datetime_str, "", "", ""
+                        ]
+                        board_sheet.append_row(new_row)
+                        st.success("입고 생성 완료!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"에러 발생: {e}")
+
+    with col2_btn:
+        if st.button("취소", use_container_width=True, key="create_cancel"):
+            st.rerun()
 @st.dialog("비밀번호 최종 확인")
 def confirm_password_change(new_pw):
     st.write("정말 비밀번호를 변경하시겠습니까?")
@@ -291,69 +352,10 @@ else:
         c1, c2, c3, c4 = st.columns(4)
        
         with c1:
-            # ==================== 입고생성 (st.popover 버전) ====================
-            with st.popover("입고생성", use_container_width=True):
-                st.subheader("새로운 입고 의뢰 작성")
-                st.write("")
-
-                factory_list = ["기체공장", "기관공장", "부품공장", "제작공장", "성능공장"]
-                selected_factory = st.selectbox("공장", factory_list, key="create_factory")
-
-                try:
-                    client = get_google_client()
-                    dept_sheet = client.open("수령 목록82").worksheet("부서")
-                    dept_data = dept_sheet.get_all_values()
-                    valid_depts = [row[1] for row in dept_data if len(row) > 1 and row[0] == selected_factory]
-                except Exception as e:
-                    st.error(f"부서 로딩 실패: {e}")
-                    valid_depts = ["부서 정보 없음"]
-
-                if not valid_depts:
-                    valid_depts = ["부서 정보 없음"]
-
-                selected_dept = st.selectbox("부서", valid_depts, key="create_dept")
-
-                item_name = st.text_input("품명", key="create_item", placeholder="품명을 입력하세요")
-                serial_num = st.text_input("일련번호", key="create_serial", placeholder="일련번호를 입력하세요")
-
-                st.write("")
-                st.markdown("**📆 요구일자**")
-                req_date = st.date_input("요구일자", value=date.today(), key="req_date", label_visibility="collapsed")
-                req_date_str = req_date.strftime("%Y-%m-%d")
-
-                st.write("---")
-
-                col1_btn, col2_btn = st.columns(2)
-                with col1_btn:
-                    if st.button("확인", use_container_width=True, type="primary", key="create_confirm"):
-                        if not item_name.strip() or not serial_num.strip():
-                            st.warning("품명과 일련번호를 입력해주세요.")
-                        else:
-                            with st.spinner("등록 중..."):
-                                try:
-                                    client = get_google_client()
-                                    board_sheet = client.open("수령 목록82").worksheet("상황판")
-                                    row_count = len(board_sheet.col_values(1))
-                                    next_seq = row_count if row_count > 0 else 1
-
-                                    req_datetime_str = f"{req_date_str} 13:00"
-                                    current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-
-                                    new_row = [
-                                        next_seq, selected_factory, selected_dept, item_name.strip(),
-                                        st.session_state.get('user_name', ''), serial_num.strip(), 1,
-                                        current_time_str, req_datetime_str, "", "", ""
-                                    ]
-                                    board_sheet.append_row(new_row)
-                                    st.success("입고 생성 완료!")
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"에러 발생: {e}")
-
-                with col2_btn:
-                    if st.button("취소", use_container_width=True, key="create_cancel"):
-                        st.rerun()
-            # ==================== popover 끝 ====================
+            # ==================== 입고생성 (st.dialog 버전) ====================
+            if st.button("입고생성", use_container_width=True):
+                dialog_create_inbound()
+            # ================================================================
 
         with c2:
             if st.button("입고", use_container_width=True):
