@@ -43,9 +43,10 @@ def make_hash(password):
 # 2. Dialog 함수들
 # ==========================================
 @st.dialog("새로운 입고 의뢰 작성")
-def dialog_create_inbound():
-    st.write("")
-
+def dialog_create_inbound(req_date):
+    # 메인 화면에서 선택한 날짜를 상단에 보여줍니다.
+    st.info(f"📆 선택된 요구일자: **{req_date.strftime('%Y-%m-%d')}**")
+    
     factory_list = ["기체공장", "기관공장", "부품공장", "제작공장", "성능공장"]
     selected_factory = st.selectbox("공장", factory_list, key="create_factory")
 
@@ -66,11 +67,6 @@ def dialog_create_inbound():
     item_name = st.text_input("품명", key="create_item", placeholder="품명을 입력하세요")
     serial_num = st.text_input("일련번호", key="create_serial", placeholder="일련번호를 입력하세요")
 
-    st.write("")
-    st.markdown("**📆 요구일자**")
-    req_date = st.date_input("요구일자", value=date.today(), key="req_date", label_visibility="collapsed")
-    req_date_str = req_date.strftime("%Y-%m-%d")
-
     st.write("---")
 
     col1_btn, col2_btn = st.columns(2)
@@ -86,7 +82,8 @@ def dialog_create_inbound():
                         row_count = len(board_sheet.col_values(1))
                         next_seq = row_count if row_count > 0 else 1
 
-                        req_datetime_str = f"{req_date_str} 13:00"
+                        # 전달받은 날짜를 문자열로 변환하여 저장
+                        req_datetime_str = f"{req_date.strftime('%Y-%m-%d')} 13:00"
                         current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
 
                         new_row = [
@@ -103,6 +100,7 @@ def dialog_create_inbound():
     with col2_btn:
         if st.button("취소", use_container_width=True, key="create_cancel"):
             st.rerun()
+
 @st.dialog("비밀번호 최종 확인")
 def confirm_password_change(new_pw):
     st.write("정말 비밀번호를 변경하시겠습니까?")
@@ -349,13 +347,17 @@ else:
            
         st.write("---")
        
+        # 💡 버튼들 위에 달력을 먼저 배치합니다. 여기서 클릭하여 쉽게 날짜를 고를 수 있습니다.
+        st.markdown("**📆 요구일자 선택**")
+        req_date = st.date_input("요구일자", value=date.today(), key="main_req_date", label_visibility="collapsed")
+        st.write("")
+       
         c1, c2, c3, c4 = st.columns(4)
        
         with c1:
-            # ==================== 입고생성 (st.dialog 버전) ====================
             if st.button("입고생성", use_container_width=True):
-                dialog_create_inbound()
-            # ================================================================
+                # 버튼을 누르면 위에서 선택한 날짜(req_date)를 다이얼로그로 쏙 전달합니다.
+                dialog_create_inbound(req_date)
 
         with c2:
             if st.button("입고", use_container_width=True):
