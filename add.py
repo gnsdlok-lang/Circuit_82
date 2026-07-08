@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date   # ← date 추가
 import gspread
 from google.oauth2.service_account import Credentials
 import json
@@ -40,7 +40,7 @@ def make_hash(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 # ==========================================
-# 2. Dialog 함수들 (입고생성은 popover로 변경)
+# 2. Dialog 함수들
 # ==========================================
 @st.dialog("비밀번호 최종 확인")
 def confirm_password_change(new_pw):
@@ -217,7 +217,6 @@ if not st.session_state['logged_in']:
 # 로그인 이후 화면
 # ==========================================
 else:
-    # [화면 2] 메인 화면
     if st.session_state['page'] == 'main':
         level_str = "일반"
         if st.session_state['user_level'] == "2":
@@ -259,7 +258,6 @@ else:
             st.session_state['page'] = 'change_pw'
             st.rerun()
 
-    # [화면 3] 입고/수령 하기 (의뢰자)
     elif st.session_state['page'] == 'inbound_outbound':
         st.subheader("📦 입고/수령 상황판")
        
@@ -293,7 +291,7 @@ else:
         c1, c2, c3, c4 = st.columns(4)
        
         with c1:
-            # ==================== 입고생성 (popover 버전) ====================
+            # ==================== 입고생성 (st.popover 버전) ====================
             with st.popover("입고생성", use_container_width=True):
                 st.subheader("새로운 입고 의뢰 작성")
                 st.write("")
@@ -393,7 +391,6 @@ else:
             st.session_state['page'] = 'main'
             st.rerun()
 
-    # [화면 4] 비밀번호 변경
     elif st.session_state['page'] == 'change_pw':
         st.title("🔐 비밀번호 변경")
         new_pw = st.text_input("재설정 비밀번호", type="password")
