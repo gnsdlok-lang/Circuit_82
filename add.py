@@ -172,11 +172,12 @@ def dialog_create_inbound():
     serial_num = st.text_input("일련번호", key="create_serial", placeholder="일련번호를 입력하세요")
 
     st.write("")
-    st.markdown("**📆 요구일자**")
-
-    # 💡 placeholder 속성을 제거합니다.
-    req_date = st.date_input("요구일자", value=None, key="req_date", label_visibility="collapsed")
-
+    req_date = st.date_input(
+        "📆 요구일자 (아래 빈칸을 클릭하여 달력에서 선택하세요)", 
+        value=None, 
+        key="req_date",
+        format="YYYY/MM/DD"  # 날짜 형식을 시각적으로 보여줍니다.
+    )
     st.write("---")
 
     col1_btn, col2_btn = st.columns(2)
