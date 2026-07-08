@@ -173,9 +173,9 @@ def dialog_create_inbound():
 
     st.write("")
     st.markdown("**📆 요구일자**")
-    
-    # 💡 value=None 으로 주어 초기값을 빈 상태로 만들고 달력 팝업을 유도합니다.
-    req_date = st.date_input("요구일자", value=None, key="req_date", label_visibility="collapsed", placeholder="날짜 선택을 눌러주세요")
+
+    # 💡 placeholder 속성을 제거합니다.
+    req_date = st.date_input("요구일자", value=None, key="req_date", label_visibility="collapsed")
 
     st.write("---")
 
