@@ -141,7 +141,7 @@ def dialog_status_check(row_data, sheet_row_idx):
                     st.rerun() 
         else:
             st.button("삭제", use_container_width=True, disabled=True)
-            st.caption("※ 상태가 (임시)일 때만 삭제 가능합니다.")
+            st.caption("※ 상태가 1(임시)일 때만 삭제 가능합니다.")
             
     with col2:
         if st.button("뒤로가기", use_container_width=True):
@@ -310,43 +310,49 @@ else:
         elif st.session_state['user_level'] == "3":
             level_str = "관리자"
             
-        st.markdown(f"**{st.session_state['user_name']}**님 환영합니다! *(권한: {level_str})*")
+        # UX 개선: 환영 문구 및 현재 권한 안내
+        st.markdown(f"### 👋 **{st.session_state['user_name']}**님, 환영합니다!")
+        st.caption(f"현재 로그인된 계정 권한: **{level_str}**")
         st.write("---")
         
+        st.markdown("#### 📌 원하시는 업무를 선택해주세요")
+        st.write("") # 간격
+        
+        # UX 개선: 버튼에 직관적인 아이콘 추가 및 배치 정렬
         if st.session_state['user_level'] == "3":
             col1, col2, col3 = st.columns(3)
             with col1:
-                if st.button("입고/수령하기\n(의뢰자)", use_container_width=True):
+                if st.button("📦 입고/수령\n(의뢰자용)", use_container_width=True):
                     st.session_state['page'] = 'inbound_outbound'
                     st.rerun()
             with col2:
-                if st.button("작업 시작/종료\n(작업자)", use_container_width=True):
+                if st.button("🛠️ 작업 시작/종료\n(작업자용)", use_container_width=True):
                     st.session_state['page'] = 'worker_dashboard'
                     st.rerun()
             with col3:
-                st.button("관리자 화면", use_container_width=True)
+                st.button("⚙️ 관리자 화면\n(준비중)", use_container_width=True)
         else:
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("입고/수령하기\n(의뢰자)", use_container_width=True):
+                if st.button("📦 입고/수령\n(의뢰자용)", use_container_width=True):
                     st.session_state['page'] = 'inbound_outbound'
                     st.rerun()
             with col2:
-                if st.button("작업 시작/종료\n(작업자)", use_container_width=True):
+                if st.button("🛠️ 작업 시작/종료\n(작업자용)", use_container_width=True):
                     st.session_state['page'] = 'worker_dashboard'
                     st.rerun()
                 
-        st.write("")
-        st.button("로그아웃", on_click=lambda: st.session_state.clear(), use_container_width=True)
-        
         st.markdown("<br><br>", unsafe_allow_html=True)
-        st.markdown(
-            """<style>div.stButton > button:first-child { border:none; background:transparent; color:#666666; box-shadow:none; }</style>""",
-            unsafe_allow_html=True
-        )
-        if st.button("비밀번호 변경", use_container_width=True):
-            st.session_state['page'] = 'change_pw'
-            st.rerun()
+        st.write("---")
+        
+        # 하단 설정/로그아웃 영역 (버튼 CSS 오류 수정됨)
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("🔐 비밀번호 변경", use_container_width=True):
+                st.session_state['page'] = 'change_pw'
+                st.rerun()
+        with c2:
+            st.button("🚪 로그아웃", on_click=lambda: st.session_state.clear(), use_container_width=True)
 
     # ------------------ 입고/수령 상황판 (의뢰자용) ------------------
     elif st.session_state['page'] == 'inbound_outbound':
@@ -404,7 +410,7 @@ else:
                     if raw_status == '1':
                         dialog_confirm_inbound(int(selected_row['sheet_row_idx']))
                     else:
-                        st.error("상태가 (임시)가 아닙니다")
+                        st.error("상태가 임시(1)가 아닙니다")
 
         with c3:
             if st.button("수령", use_container_width=True):
@@ -418,7 +424,7 @@ else:
                     if raw_status == '4':
                         dialog_confirm_receipt(int(selected_row['sheet_row_idx']))
                     else:
-                        st.error("상태가 (수령대기)가 아닙니다")
+                        st.error("상태가 수령대기(4)가 아닙니다")
 
         with c4:
             if st.button("상태확인", use_container_width=True):
