@@ -410,12 +410,7 @@ else:
     # ------------------ 입고/수령 상황판 (의뢰자용) ------------------
     elif st.session_state['page'] == 'inbound_outbound':
         # 💡 help 파라미터를 추가하여 툴팁(도움말) 생성
-        st.subheader(
-            "📦 입고/수령 상황판", 
-            help="진행 순서 : ⚪ 임시 ➔ 🟡 입고 ➔ ▶️ 작업중 ➔ 🟢 수령대기 ➔ ✅ 수령완료"
-        )
         st.subheader("📦 입고/수령 상황판")
-        
         raw_data = get_cached_board_data()
         
         if len(raw_data) > 1:
@@ -459,9 +454,16 @@ else:
                 use_container_width=True,
                 hide_index=True,
                 selection_mode="single-row",
-                on_select="rerun"
+                on_select="rerun",
+                column_config={
+                    "상태": st.column_config.Column(
+                        "상태",
+                        help="진행 순서 : ⚪ 임시 ➔ 🟡 입고 ➔ ▶️ 작업중 ➔ 🟢 수령대기 ➔ ✅ 수령완료"
+                    )
+                }
             )
             selected_indices = event.selection.rows
+
         else:
             st.info("현재 등록된 데이터가 없습니다.")
             selected_indices = []
@@ -536,13 +538,7 @@ else:
     # ------------------ 작업 시작/종료 (작업자용) ------------------
     elif st.session_state['page'] == 'worker_dashboard':
         # 💡 help 파라미터를 추가하여 툴팁(도움말) 생성
-        st.subheader(
-            "🛠️ 작업 시작/종료 상황판", 
-            help="진행 순서 : ⚪ 임시 ➔ 🟡 작업대기 ➔ ▶️ 작업중 ➔ 🟢 작업완료 ➔ ✅ 출고완료"
-        )
-        
-        st.subheader("🛠️ 작업 시작/종료 상황판")
-        
+        st.subheader( "🛠️ 작업 시작/종료 상황판" )
         raw_data = get_cached_board_data()
         
         if len(raw_data) > 1:
@@ -586,7 +582,13 @@ else:
                 use_container_width=True,
                 hide_index=True,
                 selection_mode="single-row",
-                on_select="rerun"
+                on_select="rerun",
+                column_config={
+                    "상태": st.column_config.Column(
+                        "상태",
+                        help="진행 순서 : ⚪ 임시 ➔ 🟡 작업대기 ➔ ▶️ 작업중 ➔ 🟢 작업완료 ➔ ✅ 출고완료"
+                    )
+                }
             )
             selected_indices = event.selection.rows
         else:
