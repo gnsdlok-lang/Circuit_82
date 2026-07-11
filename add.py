@@ -150,41 +150,93 @@ def dialog_status_check(row_data, sheet_row_idx):
 
 # ----------------- 새로 추가된 작업자용 Dialog 함수 -----------------
 
-@st.dialog("작업 시작 확인")
-def dialog_confirm_start(sheet_row_idx):
-    st.write("정말 작업을 시작하시겠습니까?")
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("확인", use_container_width=True, type="primary"):
-            client = get_google_client()
-            board_sheet = client.open("수령 목록82").worksheet("상황판")
-            current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-            board_sheet.update_cell(sheet_row_idx, 7, 3) # 상태 3으로 변경
-            board_sheet.update_cell(sheet_row_idx, 10, current_time_str) # 10열: 작업시작 시간
-            board_sheet.update_cell(sheet_row_idx, 13, st.session_state.get('user_name', '알수없음')) # 13열: 로그인 유저
-            st.success("작업 시작 처리 완료!")
-            st.rerun()
-    with col2:
-        if st.button("취소", use_container_width=True):
-            st.rerun()
+@st.dialog("작업 시작/종료 처리")
+def dialog_worker_action(row_data, sheet_row_idx):
+    # 인덱스: 0(1열), 1(2열), 2(3열) ...
+    st.markdown(f"**의뢰부서:** {row_data[1]} {row_data[2]}")
+    st.markdown(f"**품명:** {row_data[3]}")
+    st.markdown(f"**의뢰자:** {row_data[4]}")
+    st.markdown(f"**일련번호:** {row_data[5]}")
+    st.markdown(f"**입고일자:** {row_data[7] if len(row_data)>7 else '-'}")
+    st.markdown(f"**요구일자:** {row_data[8] if len(row_data)>8 else '-'}")
+    st.markdown(f"**작업시작:** {row_data[9] if len(row_data)>9 else '-'}")
+    st.markdown(f"**작업종료:** {row_data[10] if len(row_data)>10 else '-'}")
+    
+    st.write("---")
+    
+    # 상태 저장을 위한 session_state 초기화
+    if "worker_confirm" not in st.session_state:
+        st.session_state.worker_confirm = None
 
-@st.dialog("작업 종료 확인")
-def dialog_confirm_end(sheet_row_idx):
-    st.write("정말 작업을 종료하시겠습니까?")
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("확인", use_container_width=True, type="primary"):
-            client = get_google_client()
-            board_sheet = client.open("수령 목록82").worksheet("상황판")
-            current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-            board_sheet.update_cell(sheet_row_idx, 7, 4) # 상태 4로 변경
-            board_sheet.update_cell(sheet_row_idx, 11, current_time_str) # 11열: 작업종료 시간
-            board_sheet.update_cell(sheet_row_idx, 14, st.session_state.get('user_name', '알수없음')) # 14열: 로그인 유저
-            st.success("작업 종료 처리 완료!")
-            st.rerun()
-    with col2:
-        if st.button("취소", use_container_width=True):
-            st.rerun()
+    # 1. 시작 버튼을 눌러서 확인 중일 때의 화면
+    if st.session_state.worker_confirm == "start":
+        st.warning("정말 작업을 시작하시겠습니까?")
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("최종 시작", use_container_width=True, type="primary"):
+                client = get_google_client()
+                board_sheet = client.open("수령 목록82").worksheet("상황판")
+                current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+                board_sheet.update_cell(sheet_row_idx, 7, 3) # 상태 3으로 변경
+                board_sheet.update_cell(sheet_row_idx, 10, current_time_str) # 10열: 작업시작 시간
+                board_sheet.update_cell(sheet_row_idx, 13, st.session_state.get('user_name', '알수없음')) # 13열: 로그인 유저
+                st.session_state.worker_confirm = None # 상태 초기화
+                st.success("작업 시작 처리 완료!")
+                st.rerun()
+        with c2:
+            if st.button("취소", use_container_width=True):
+                st.session_state.worker_confirm = None
+                st.rerun()
+                
+    # 2. 종료 버튼을 눌러서 확인 중일 때의 화면
+    elif st.session_state.worker_confirm == "end":
+        st.warning("정말 작업을 종료하시겠습니까?")
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("최종 종료", use_container_width=True, type="primary"):
+                client = get_google_client()
+                board_sheet = client.open("수령 목록82").worksheet("상황판")
+                current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+                board_sheet.update_cell(sheet_row_idx, 7, 4) # 상태 4로 변경
+                board_sheet.update_cell(sheet_row_idx, 11, current_time_str) # 11열: 작업종료 시간
+                board_sheet.update_cell(sheet_row_idx, 14, st.session_state.get('user_name', '알수없음')) # 14열: 로그인 유저
+                st.session_state.worker_confirm = None # 상태 초기화
+                st.success("작업 종료 처리 완료!")
+                st.rerun()
+        with c2:
+            if st.button("취소", use_container_width=True):
+                st.session_state.worker_confirm = None
+                st.rerun()
+
+    # 3. 기본 화면 (아직 아무 버튼도 누르지 않았을 때)
+    else:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("시작", use_container_width=True, type="primary"):
+                status = row_data[6] # 7열 상태
+                start_time = row_data[9] if len(row_data)>9 else "" # 10열 작업시작
+                
+                if status == '2' and start_time.strip() == "":
+                    st.session_state.worker_confirm = "start" # 시작 확인 상태로 변경
+                    st.rerun()
+                else:
+                    st.error("상태를 확인해주세요")
+                    
+        with col2:
+            if st.button("종료", use_container_width=True, type="primary"):
+                status = row_data[6] # 7열 상태
+                end_time = row_data[10] if len(row_data)>10 else "" # 11열 작업종료
+                
+                if status == '3' and end_time.strip() == "":
+                    st.session_state.worker_confirm = "end" # 종료 확인 상태로 변경
+                    st.rerun()
+                else:
+                    st.error("상태를 확인해주세요")
+                    
+        with col3:
+            if st.button("뒤로가기", use_container_width=True):
+                st.session_state.worker_confirm = None
+                st.rerun()
 
 @st.dialog("작업 시작/종료 처리")
 def dialog_worker_action(row_data, sheet_row_idx):
@@ -464,6 +516,7 @@ else:
                 else:
                     selected_row = df_display.iloc[selected_indices[0]]
                     idx_in_raw = int(selected_row['sheet_row_idx']) - 1
+                    st.session_state.worker_confirm = None
                     dialog_status_check(raw_data[idx_in_raw], int(selected_row['sheet_row_idx']))
         with c3:
             if st.button("⬅️ 뒤로가기", use_container_width=True):
