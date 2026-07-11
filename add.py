@@ -144,7 +144,7 @@ def dialog_confirm_receipt(row_data, sheet_row_idx):
 
 @st.dialog("상태 확인")
 def dialog_status_check(row_data, sheet_row_idx):
-    # 1. 상태값 및 이모지 매핑 (화면에 따라 다르게 적용)
+    # 1. 상태값 및 이모지 매핑
     status_code = str(row_data[6]).strip() if len(row_data) > 6 else ""
     if st.session_state.get('page') == 'worker_dashboard':
         status_map = {'1': '⚪ 임시', '2': '🟡 작업대기', '3': '▶️ 작업중', '4': '🟢 작업완료', '5': '✅ 출고완료'}
@@ -172,26 +172,36 @@ def dialog_status_check(row_data, sheet_row_idx):
     # --- ⏱️ 하단: 타임라인 ---
     st.markdown("#### ⏱️ 타임라인")
     
-    # 데이터 가공 (요구일자는 날짜만, 나머지는 그대로, 없으면 "-")
+    # 초(Seconds)를 잘라내는 내부 함수
+    def trim_seconds(time_str):
+        t = time_str.strip()
+        if not t:
+            return "-"
+        # "YYYY-MM-DD HH:MM:SS" 형태에서 마지막 ":" 이후를 잘라냄
+        if t.count(":") == 2:
+            return t.rsplit(":", 1)[0]
+        return t
+
+    # 데이터 가공 (요구일자는 날짜만, 나머지는 분(Minute)까지만)
     req_raw = row_data[8].strip() if len(row_data) > 8 and row_data[8].strip() else ""
-    req_date = req_raw.split(" ")[0] if req_raw else "-"  # 날짜 부분만 자르기
+    req_date = req_raw.split(" ")[0] if req_raw else "-"  
     
-    inbound = row_data[7].strip() if len(row_data) > 7 and row_data[7].strip() else "-"
-    start_work = row_data[9].strip() if len(row_data) > 9 and row_data[9].strip() else "-"
-    end_work = row_data[10].strip() if len(row_data) > 10 and row_data[10].strip() else "-"
-    receipt = row_data[11].strip() if len(row_data) > 11 and row_data[11].strip() else "-"
+    inbound = trim_seconds(row_data[7]) if len(row_data) > 7 else "-"
+    start_work = trim_seconds(row_data[9]) if len(row_data) > 9 else "-"
+    end_work = trim_seconds(row_data[10]) if len(row_data) > 10 else "-"
+    receipt = trim_seconds(row_data[11]) if len(row_data) > 11 else "-"
 
     # 1행: 요구일자 / 입고일자
     c1, c2 = st.columns(2)
     c1.markdown(f"<span style='color:gray; font-size:14px'>요구일자</span><br>**{req_date}**", unsafe_allow_html=True)
     c2.markdown(f"<span style='color:gray; font-size:14px'>입고일자</span><br>**{inbound}**", unsafe_allow_html=True)
-    st.write("") # 간격 띄우기
+    st.write("") 
 
     # 2행: 작업시작 / 작업종료
     c3, c4 = st.columns(2)
     c3.markdown(f"<span style='color:gray; font-size:14px'>작업시작</span><br>**{start_work}**", unsafe_allow_html=True)
     c4.markdown(f"<span style='color:gray; font-size:14px'>작업종료</span><br>**{end_work}**", unsafe_allow_html=True)
-    st.write("") # 간격 띄우기
+    st.write("") 
 
     # 3행: 수령일자
     c5, c6 = st.columns(2)
