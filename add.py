@@ -96,9 +96,9 @@ def dialog_confirm_receipt(sheet_row_idx):
             client = get_google_client()
             board_sheet = client.open("수령 목록82").worksheet("상황판")
             current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-            board_sheet.update_cell(sheet_row_idx, 7, 5)
-            board_sheet.update_cell(sheet_row_idx, 12, current_time_str)
-            board_sheet.update_cell(sheet_row_idx, 15, st.session_state.get('user_name', '알수없음')) # 요청하신 15열 로그인 유저 기록 추가
+            board_sheet.update_cell(sheet_row_idx, 7, 5) # 상태 5로 변경
+            board_sheet.update_cell(sheet_row_idx, 12, current_time_str) # 12열: 수령일자
+            board_sheet.update_cell(sheet_row_idx, 15, st.session_state.get('user_name', '알수없음')) # 15열: 수령 처리한 로그인 유저
             st.success("수령 처리 완료!")
             st.rerun()
     with col2:
@@ -148,11 +148,8 @@ def dialog_status_check(row_data, sheet_row_idx):
             st.session_state.confirm_delete = False
             st.rerun()
 
-# ----------------- 새로 추가된 작업자용 Dialog 함수 -----------------
-
 @st.dialog("작업 시작/종료 처리")
 def dialog_worker_action(row_data, sheet_row_idx):
-    # 인덱스: 0(1열), 1(2열), 2(3열) ...
     st.markdown(f"**의뢰부서:** {row_data[1]} {row_data[2]}")
     st.markdown(f"**품명:** {row_data[3]}")
     st.markdown(f"**의뢰자:** {row_data[4]}")
@@ -177,10 +174,10 @@ def dialog_worker_action(row_data, sheet_row_idx):
                 client = get_google_client()
                 board_sheet = client.open("수령 목록82").worksheet("상황판")
                 current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-                board_sheet.update_cell(sheet_row_idx, 7, 3) # 상태 3으로 변경
+                board_sheet.update_cell(sheet_row_idx, 7, 3) # 7열 상태 3으로 변경
                 board_sheet.update_cell(sheet_row_idx, 10, current_time_str) # 10열: 작업시작 시간
                 board_sheet.update_cell(sheet_row_idx, 13, st.session_state.get('user_name', '알수없음')) # 13열: 로그인 유저
-                st.session_state.worker_confirm = None # 상태 초기화
+                st.session_state.worker_confirm = None
                 st.success("작업 시작 처리 완료!")
                 st.rerun()
         with c2:
@@ -197,10 +194,10 @@ def dialog_worker_action(row_data, sheet_row_idx):
                 client = get_google_client()
                 board_sheet = client.open("수령 목록82").worksheet("상황판")
                 current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-                board_sheet.update_cell(sheet_row_idx, 7, 4) # 상태 4로 변경
+                board_sheet.update_cell(sheet_row_idx, 7, 4) # 7열 상태 4로 변경
                 board_sheet.update_cell(sheet_row_idx, 11, current_time_str) # 11열: 작업종료 시간
                 board_sheet.update_cell(sheet_row_idx, 14, st.session_state.get('user_name', '알수없음')) # 14열: 로그인 유저
-                st.session_state.worker_confirm = None # 상태 초기화
+                st.session_state.worker_confirm = None
                 st.success("작업 종료 처리 완료!")
                 st.rerun()
         with c2:
@@ -208,27 +205,27 @@ def dialog_worker_action(row_data, sheet_row_idx):
                 st.session_state.worker_confirm = None
                 st.rerun()
 
-    # 3. 기본 화면 (아직 아무 버튼도 누르지 않았을 때)
+    # 3. 기본 화면 (처음 창을 열었을 때)
     else:
         col1, col2, col3 = st.columns(3)
         with col1:
             if st.button("시작", use_container_width=True, type="primary"):
-                status = row_data[6] # 7열 상태
+                status = str(row_data[6]) # 7열 상태
                 start_time = row_data[9] if len(row_data)>9 else "" # 10열 작업시작
                 
                 if status == '2' and start_time.strip() == "":
-                    st.session_state.worker_confirm = "start" # 시작 확인 상태로 변경
+                    st.session_state.worker_confirm = "start"
                     st.rerun()
                 else:
                     st.error("상태를 확인해주세요")
                     
         with col2:
             if st.button("종료", use_container_width=True, type="primary"):
-                status = row_data[6] # 7열 상태
+                status = str(row_data[6]) # 7열 상태
                 end_time = row_data[10] if len(row_data)>10 else "" # 11열 작업종료
                 
                 if status == '3' and end_time.strip() == "":
-                    st.session_state.worker_confirm = "end" # 종료 확인 상태로 변경
+                    st.session_state.worker_confirm = "end"
                     st.rerun()
                 else:
                     st.error("상태를 확인해주세요")
@@ -237,46 +234,6 @@ def dialog_worker_action(row_data, sheet_row_idx):
             if st.button("뒤로가기", use_container_width=True):
                 st.session_state.worker_confirm = None
                 st.rerun()
-
-@st.dialog("작업 시작/종료 처리")
-def dialog_worker_action(row_data, sheet_row_idx):
-    # 인덱스: 0(1열), 1(2열), 2(3열) ...
-    st.markdown(f"**의뢰부서:** {row_data[1]} {row_data[2]}")
-    st.markdown(f"**품명:** {row_data[3]}")
-    st.markdown(f"**의뢰자:** {row_data[4]}")
-    st.markdown(f"**일련번호:** {row_data[5]}")
-    st.markdown(f"**입고일자:** {row_data[7] if len(row_data)>7 else '-'}")
-    st.markdown(f"**요구일자:** {row_data[8] if len(row_data)>8 else '-'}")
-    st.markdown(f"**작업시작:** {row_data[9] if len(row_data)>9 else '-'}")
-    st.markdown(f"**작업종료:** {row_data[10] if len(row_data)>10 else '-'}")
-    
-    st.write("---")
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("시작", use_container_width=True, type="primary"):
-            status = row_data[6] # 7열 상태
-            start_time = row_data[9] if len(row_data)>9 else "" # 10열 작업시작
-            
-            if status == '2' and start_time.strip() == "":
-                dialog_confirm_start(sheet_row_idx)
-            else:
-                st.error("상태를 확인해주세요")
-                
-    with col2:
-        if st.button("종료", use_container_width=True, type="primary"):
-            status = row_data[6] # 7열 상태
-            end_time = row_data[10] if len(row_data)>10 else "" # 11열 작업종료
-            
-            if status == '3' and end_time.strip() == "":
-                dialog_confirm_end(sheet_row_idx)
-            else:
-                st.error("상태를 확인해주세요")
-                
-    with col3:
-        if st.button("뒤로가기", use_container_width=True):
-            st.rerun()
-
 
 # ==========================================
 # 3. 세션 상태 초기화
@@ -394,7 +351,7 @@ else:
             st.session_state['page'] = 'change_pw'
             st.rerun()
 
-    # ------------------ 입고/수령 상황판 화면 ------------------
+    # ------------------ 입고/수령 상황판 (의뢰자용) ------------------
     elif st.session_state['page'] == 'inbound_outbound':
         st.subheader("📦 입고/수령 상황판")
         
@@ -468,7 +425,7 @@ else:
             st.session_state['page'] = 'main'
             st.rerun()
 
-    # ------------------ 작업 시작/종료 (작업자) 상황판 화면 ------------------
+    # ------------------ 작업 시작/종료 (작업자용) ------------------
     elif st.session_state['page'] == 'worker_dashboard':
         st.subheader("🛠️ 작업 시작/종료 상황판")
         
@@ -508,6 +465,9 @@ else:
                 else:
                     selected_row = df_display.iloc[selected_indices[0]]
                     idx_in_raw = int(selected_row['sheet_row_idx']) - 1
+                    
+                    # 다이얼로그 열기 전에 이전 확인 상태 초기화
+                    st.session_state.worker_confirm = None
                     dialog_worker_action(raw_data[idx_in_raw], int(selected_row['sheet_row_idx']))
         with c2:
             if st.button("상태확인", use_container_width=True):
@@ -516,7 +476,6 @@ else:
                 else:
                     selected_row = df_display.iloc[selected_indices[0]]
                     idx_in_raw = int(selected_row['sheet_row_idx']) - 1
-                    st.session_state.worker_confirm = None
                     dialog_status_check(raw_data[idx_in_raw], int(selected_row['sheet_row_idx']))
         with c3:
             if st.button("⬅️ 뒤로가기", use_container_width=True):
