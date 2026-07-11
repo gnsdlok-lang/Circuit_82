@@ -409,8 +409,8 @@ else:
 
     # ------------------ 입고/수령 상황판 (의뢰자용) ------------------
     elif st.session_state['page'] == 'inbound_outbound':
-        # 💡 help 파라미터를 추가하여 툴팁(도움말) 생성
         st.subheader("📦 입고/수령 상황판")
+        
         raw_data = get_cached_board_data()
         
         if len(raw_data) > 1:
@@ -443,27 +443,22 @@ else:
             display_df["부서"] = df['2'] if '2' in df.columns else ""
             display_df["품명"] = df['3'] if '3' in df.columns else ""
             display_df["일련번호"] = df['5'] if '5' in df.columns else ""
-
+            
             status_map_inbound = {'1': '⚪ 임시', '2': '🟡 입고', '3': '▶️ 작업중', '4': '🟢 수령대기', '5': '✅ 수령완료'}
             if '6' in df.columns:
                 display_df["상태"] = df['6'].astype(str).str.strip().map(status_map_inbound).fillna(df['6'])
 
             st.caption("※ 표의 가장 왼쪽 체크박스를 눌러 항목을 선택하세요.")
+            st.caption("진행 순서 : ⚪ 임시 ➔ 🟡 입고 ➔ ▶️ 작업중 ➔ 🟢 수령대기 ➔ ✅ 수령완료")
+            
             event = st.dataframe(
                 display_df,
                 use_container_width=True,
                 hide_index=True,
                 selection_mode="single-row",
-                on_select="rerun",
-                column_config={
-                    "상태": st.column_config.Column(
-                        "상태",
-                        help="진행 순서 : ⚪ 임시 ➔ 🟡 입고 ➔ ▶️ 작업중 ➔ 🟢 수령대기 ➔ ✅ 수령완료"
-                    )
-                }
+                on_select="rerun"
             )
             selected_indices = event.selection.rows
-
         else:
             st.info("현재 등록된 데이터가 없습니다.")
             selected_indices = []
@@ -486,7 +481,6 @@ else:
                     actual_row = df.iloc[selected_indices[0]]
                     sheet_row_idx = int(actual_row['sheet_row_idx'])
                     
-                    # 💡 여기가 수정된 부분입니다: sheet_row_idx - 1
                     row_data = raw_data[sheet_row_idx - 1]
                     raw_status = str(row_data[6]).strip() if len(row_data)>6 else ""
                     
@@ -503,7 +497,6 @@ else:
                     actual_row = df.iloc[selected_indices[0]]
                     sheet_row_idx = int(actual_row['sheet_row_idx'])
                     
-                    # 💡 여기도 수정되었습니다.
                     row_data = raw_data[sheet_row_idx - 1]
                     raw_status = str(row_data[6]).strip() if len(row_data)>6 else ""
                     
@@ -520,7 +513,6 @@ else:
                     actual_row = df.iloc[selected_indices[0]]
                     sheet_row_idx = int(actual_row['sheet_row_idx'])
                     
-                    # 💡 여기도 수정되었습니다.
                     row_data = raw_data[sheet_row_idx - 1]
                     dialog_status_check(row_data, sheet_row_idx)
 
@@ -537,8 +529,8 @@ else:
 
     # ------------------ 작업 시작/종료 (작업자용) ------------------
     elif st.session_state['page'] == 'worker_dashboard':
-        # 💡 help 파라미터를 추가하여 툴팁(도움말) 생성
-        st.subheader( "🛠️ 작업 시작/종료 상황판" )
+        st.subheader("🛠️ 작업 시작/종료 상황판")
+        
         raw_data = get_cached_board_data()
         
         if len(raw_data) > 1:
@@ -577,18 +569,14 @@ else:
                 display_df["상태"] = df['6'].astype(str).str.strip().map(status_map_worker).fillna(df['6'])
 
             st.caption("※ 표의 가장 왼쪽 체크박스를 눌러 항목을 선택하세요.")
+            st.caption("진행 순서 : ⚪ 임시 ➔ 🟡 작업대기 ➔ ▶️ 작업중 ➔ 🟢 작업완료 ➔ ✅ 출고완료")
+            
             event = st.dataframe(
                 display_df,
                 use_container_width=True,
                 hide_index=True,
                 selection_mode="single-row",
-                on_select="rerun",
-                column_config={
-                    "상태": st.column_config.Column(
-                        "상태",
-                        help="진행 순서 : ⚪ 임시 ➔ 🟡 작업대기 ➔ ▶️ 작업중 ➔ 🟢 작업완료 ➔ ✅ 출고완료"
-                    )
-                }
+                on_select="rerun"
             )
             selected_indices = event.selection.rows
         else:
@@ -601,14 +589,13 @@ else:
         c1, c2, c3 = st.columns(3)
 
         with c1:
-            if st.button("선택", use_container_width=True):
+            if st.button("시작/종료", use_container_width=True):
                 if len(selected_indices) == 0:
                     st.warning("표에서 항목을 먼저 선택하세요.")
                 else:
                     actual_row = df.iloc[selected_indices[0]]
                     sheet_row_idx = int(actual_row['sheet_row_idx'])
                     
-                    # 💡 여기도 수정되었습니다.
                     row_data = raw_data[sheet_row_idx - 1]
                     
                     st.session_state.worker_confirm = None
@@ -621,7 +608,6 @@ else:
                     actual_row = df.iloc[selected_indices[0]]
                     sheet_row_idx = int(actual_row['sheet_row_idx'])
                     
-                    # 💡 여기도 수정되었습니다.
                     row_data = raw_data[sheet_row_idx - 1]
                     
                     st.session_state.confirm_delete = False
