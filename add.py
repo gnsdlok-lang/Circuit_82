@@ -409,6 +409,11 @@ else:
 
     # ------------------ 입고/수령 상황판 (의뢰자용) ------------------
     elif st.session_state['page'] == 'inbound_outbound':
+        # 💡 help 파라미터를 추가하여 툴팁(도움말) 생성
+        st.subheader(
+            "📦 입고/수령 상황판", 
+            help="진행 순서 : ⚪ 임시 ➔ 🟡 입고 ➔ ▶️ 작업중 ➔ 🟢 수령대기 ➔ ✅ 수령완료"
+        )
         st.subheader("📦 입고/수령 상황판")
         
         raw_data = get_cached_board_data()
@@ -443,8 +448,8 @@ else:
             display_df["부서"] = df['2'] if '2' in df.columns else ""
             display_df["품명"] = df['3'] if '3' in df.columns else ""
             display_df["일련번호"] = df['5'] if '5' in df.columns else ""
-            
-            status_map_inbound = {'1': '⏳ 임시', '2': '📦 입고', '3': '▶️ 작업중', '4': '🟢 수령대기', '5': '✅ 수령완료'}
+
+            status_map_inbound = {'1': '⚪ 임시', '2': '🟡 입고', '3': '▶️ 작업중', '4': '🟢 수령대기', '5': '✅ 수령완료'}
             if '6' in df.columns:
                 display_df["상태"] = df['6'].astype(str).str.strip().map(status_map_inbound).fillna(df['6'])
 
@@ -530,6 +535,12 @@ else:
 
     # ------------------ 작업 시작/종료 (작업자용) ------------------
     elif st.session_state['page'] == 'worker_dashboard':
+        # 💡 help 파라미터를 추가하여 툴팁(도움말) 생성
+        st.subheader(
+            "🛠️ 작업 시작/종료 상황판", 
+            help="진행 순서 : ⚪ 임시 ➔ 🟡 작업대기 ➔ ▶️ 작업중 ➔ 🟢 작업완료 ➔ ✅ 출고완료"
+        )
+        
         st.subheader("🛠️ 작업 시작/종료 상황판")
         
         raw_data = get_cached_board_data()
@@ -565,7 +576,7 @@ else:
             display_df["품명"] = df['3'] if '3' in df.columns else ""
             display_df["일련번호"] = df['5'] if '5' in df.columns else ""
             
-            status_map_worker = {'1': '⏳ 임시', '2': '📦 작업대기', '3': '▶️ 작업중', '4': '🟢 작업완료', '5': '✅ 출고완료'}
+            status_map_worker = {'1': '⚪ 임시', '2': '🟡 작업대기', '3': '▶️ 작업중', '4': '🟢 작업완료', '5': '✅ 출고완료'}
             if '6' in df.columns:
                 display_df["상태"] = df['6'].astype(str).str.strip().map(status_map_worker).fillna(df['6'])
 
