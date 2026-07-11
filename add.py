@@ -40,13 +40,13 @@ def make_hash(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 # ==========================================
-# 2. Dialog 함수들 (입고생성은 제외됨)
+# 2. Dialog 함수들
 # ==========================================
 @st.dialog("비밀번호 최종 확인")
 def confirm_password_change(new_pw):
     st.write("정말 비밀번호를 변경하시겠습니까?")
     st.caption("변경 시 자동으로 로그아웃되며, 새로운 비밀번호로 다시 로그인해야 합니다.")
-   
+    
     col1, col2 = st.columns(2)
     with col1:
         if st.button("최종 변경", use_container_width=True, type="primary"):
@@ -55,7 +55,7 @@ def confirm_password_change(new_pw):
                     client = get_google_client()
                     account_sheet = client.open("수령 목록82").worksheet("계정관리")
                     cell = account_sheet.find(st.session_state['user_id'], in_column=2)
-                   
+                    
                     if cell:
                         hashed_pw = make_hash(new_pw)
                         account_sheet.update_cell(cell.row, 3, hashed_pw)
@@ -98,6 +98,7 @@ def dialog_confirm_receipt(sheet_row_idx):
             current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
             board_sheet.update_cell(sheet_row_idx, 7, 5)
             board_sheet.update_cell(sheet_row_idx, 12, current_time_str)
+            board_sheet.update_cell(sheet_row_idx, 15, st.session_state.get('user_name', '알수없음')) # 요청하신 15열 로그인 유저 기록 추가
             st.success("수령 처리 완료!")
             st.rerun()
     with col2:
@@ -110,12 +111,12 @@ def dialog_status_check(row_data, sheet_row_idx):
     st.markdown(f"**품명:** {row_data[3]}")
     st.markdown(f"**의뢰자:** {row_data[4]}")
     st.markdown(f"**일련번호:** {row_data[5]}")
-    st.markdown(f"**입고일자:** {row_data[7]}")
-    st.markdown(f"**요구일자:** {row_data[8]}")
+    st.markdown(f"**입고일자:** {row_data[7] if len(row_data)>7 else '-'}")
+    st.markdown(f"**요구일자:** {row_data[8] if len(row_data)>8 else '-'}")
     st.markdown(f"**작업시작:** {row_data[9] if len(row_data)>9 else '-'}")
     st.markdown(f"**작업종료:** {row_data[10] if len(row_data)>10 else '-'}")
     st.markdown(f"**수령일자:** {row_data[11] if len(row_data)>11 else '-'}")
-   
+    
     st.write("---")
     
     if "confirm_delete" not in st.session_state:
@@ -141,11 +142,89 @@ def dialog_status_check(row_data, sheet_row_idx):
             if st.button("삭제", use_container_width=True, disabled=True):
                 pass
             st.caption("※ 상태가 1일 때만 삭제 가능합니다.")
-           
+            
     with col2:
         if st.button("뒤로가기", use_container_width=True):
             st.session_state.confirm_delete = False
             st.rerun()
+
+# ----------------- 새로 추가된 작업자용 Dialog 함수 -----------------
+
+@st.dialog("작업 시작 확인")
+def dialog_confirm_start(sheet_row_idx):
+    st.write("정말 작업을 시작하시겠습니까?")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("확인", use_container_width=True, type="primary"):
+            client = get_google_client()
+            board_sheet = client.open("수령 목록82").worksheet("상황판")
+            current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+            board_sheet.update_cell(sheet_row_idx, 7, 3) # 상태 3으로 변경
+            board_sheet.update_cell(sheet_row_idx, 10, current_time_str) # 10열: 작업시작 시간
+            board_sheet.update_cell(sheet_row_idx, 13, st.session_state.get('user_name', '알수없음')) # 13열: 로그인 유저
+            st.success("작업 시작 처리 완료!")
+            st.rerun()
+    with col2:
+        if st.button("취소", use_container_width=True):
+            st.rerun()
+
+@st.dialog("작업 종료 확인")
+def dialog_confirm_end(sheet_row_idx):
+    st.write("정말 작업을 종료하시겠습니까?")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("확인", use_container_width=True, type="primary"):
+            client = get_google_client()
+            board_sheet = client.open("수령 목록82").worksheet("상황판")
+            current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+            board_sheet.update_cell(sheet_row_idx, 7, 4) # 상태 4로 변경
+            board_sheet.update_cell(sheet_row_idx, 11, current_time_str) # 11열: 작업종료 시간
+            board_sheet.update_cell(sheet_row_idx, 14, st.session_state.get('user_name', '알수없음')) # 14열: 로그인 유저
+            st.success("작업 종료 처리 완료!")
+            st.rerun()
+    with col2:
+        if st.button("취소", use_container_width=True):
+            st.rerun()
+
+@st.dialog("작업 시작/종료 처리")
+def dialog_worker_action(row_data, sheet_row_idx):
+    # 인덱스: 0(1열), 1(2열), 2(3열) ...
+    st.markdown(f"**의뢰부서:** {row_data[1]} {row_data[2]}")
+    st.markdown(f"**품명:** {row_data[3]}")
+    st.markdown(f"**의뢰자:** {row_data[4]}")
+    st.markdown(f"**일련번호:** {row_data[5]}")
+    st.markdown(f"**입고일자:** {row_data[7] if len(row_data)>7 else '-'}")
+    st.markdown(f"**요구일자:** {row_data[8] if len(row_data)>8 else '-'}")
+    st.markdown(f"**작업시작:** {row_data[9] if len(row_data)>9 else '-'}")
+    st.markdown(f"**작업종료:** {row_data[10] if len(row_data)>10 else '-'}")
+    
+    st.write("---")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("시작", use_container_width=True, type="primary"):
+            status = row_data[6] # 7열 상태
+            start_time = row_data[9] if len(row_data)>9 else "" # 10열 작업시작
+            
+            if status == '2' and start_time.strip() == "":
+                dialog_confirm_start(sheet_row_idx)
+            else:
+                st.error("상태를 확인해주세요")
+                
+    with col2:
+        if st.button("종료", use_container_width=True, type="primary"):
+            status = row_data[6] # 7열 상태
+            end_time = row_data[10] if len(row_data)>10 else "" # 11열 작업종료
+            
+            if status == '3' and end_time.strip() == "":
+                dialog_confirm_end(sheet_row_idx)
+            else:
+                st.error("상태를 확인해주세요")
+                
+    with col3:
+        if st.button("뒤로가기", use_container_width=True):
+            st.rerun()
+
 
 # ==========================================
 # 3. 세션 상태 초기화
@@ -165,10 +244,10 @@ if 'page' not in st.session_state:
 if not st.session_state['logged_in']:
     st.markdown("<h3 style='text-align: center; color: #4A5568;'>🏢 사내 시스템</h3>", unsafe_allow_html=True)
     st.write("---")
-   
+    
     user_id = st.text_input("아이디", placeholder="아이디를 입력하세요")
     user_pw = st.text_input("비밀번호", type="password", placeholder="비밀번호를 입력하세요")
-   
+    
     if st.button("로그인", use_container_width=True, type="primary"):
         if st.session_state['lockout_until'] and datetime.now(KST) < st.session_state['lockout_until']:
             remain = int((st.session_state['lockout_until'] - datetime.now(KST)).total_seconds())
@@ -177,14 +256,14 @@ if not st.session_state['logged_in']:
             if st.session_state['lockout_until'] and datetime.now(KST) >= st.session_state['lockout_until']:
                 st.session_state['login_attempts'] = 0
                 st.session_state['lockout_until'] = None
-           
+            
             if user_id and user_pw:
                 with st.spinner('확인 중...'):
                     try:
                         client = get_google_client()
                         account_sheet = client.open("수령 목록82").worksheet("계정관리")
                         data = account_sheet.get_all_values()
-                       
+                        
                         login_success = False
                         for row in data[1:]:
                             if len(row) >= 4:
@@ -197,7 +276,7 @@ if not st.session_state['logged_in']:
                                     st.session_state['page'] = 'main'
                                     login_success = True
                                     break
-                                   
+                                    
                         if login_success:
                             st.session_state['login_attempts'] = 0
                             st.rerun()
@@ -224,10 +303,10 @@ else:
             level_str = "VIP"
         elif st.session_state['user_level'] == "3":
             level_str = "관리자"
-           
+            
         st.markdown(f"**{st.session_state['user_name']}**님 환영합니다! *(권한: {level_str})*")
         st.write("---")
-       
+        
         if st.session_state['user_level'] == "3":
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -235,7 +314,9 @@ else:
                     st.session_state['page'] = 'inbound_outbound'
                     st.rerun()
             with col2:
-                st.button("작업 시작/종료\n(작업자)", use_container_width=True)
+                if st.button("작업 시작/종료\n(작업자)", use_container_width=True):
+                    st.session_state['page'] = 'worker_dashboard'
+                    st.rerun()
             with col3:
                 st.button("관리자 화면", use_container_width=True)
         else:
@@ -245,11 +326,13 @@ else:
                     st.session_state['page'] = 'inbound_outbound'
                     st.rerun()
             with col2:
-                st.button("작업 시작/종료\n(작업자)", use_container_width=True)
-               
+                if st.button("작업 시작/종료\n(작업자)", use_container_width=True):
+                    st.session_state['page'] = 'worker_dashboard'
+                    st.rerun()
+                
         st.write("")
         st.button("로그아웃", on_click=lambda: st.session_state.clear(), use_container_width=True)
-       
+        
         st.markdown("<br><br>", unsafe_allow_html=True)
         st.markdown(
             """<style>div.stButton > button:first-child { border:none; background:transparent; color:#666666; box-shadow:none; }</style>""",
@@ -259,22 +342,22 @@ else:
             st.session_state['page'] = 'change_pw'
             st.rerun()
 
-    # ------------------ 상황판 화면 ------------------
+    # ------------------ 입고/수령 상황판 화면 ------------------
     elif st.session_state['page'] == 'inbound_outbound':
         st.subheader("📦 입고/수령 상황판")
-       
+        
         client = get_google_client()
         board_sheet = client.open("수령 목록82").worksheet("상황판")
         raw_data = board_sheet.get_all_values()
-       
+        
         if len(raw_data) > 1:
             df = pd.DataFrame(raw_data[1:], columns=raw_data[0])
             df['sheet_row_idx'] = range(2, len(df) + 2)
-           
+            
             df_display = df.tail(10).copy()
             display_cols = df_display.iloc[:, [2, 3, 5, 6]]
             display_cols.columns = ["부서", "품명", "일련번호", "상태"]
-           
+            
             event = st.dataframe(
                 display_cols,
                 use_container_width=True,
@@ -287,13 +370,12 @@ else:
             st.info("현재 등록된 데이터가 없습니다.")
             selected_indices = []
             df_display = None
-           
+            
         st.write("---")
-       
+        
         c1, c2, c3, c4 = st.columns(4)
-       
+        
         with c1:
-            # 💡 버튼 클릭 시 '입고생성' 페이지로 이동합니다.
             if st.button("입고생성", use_container_width=True):
                 st.session_state['page'] = 'create_inbound'
                 st.rerun()
@@ -334,7 +416,61 @@ else:
             st.session_state['page'] = 'main'
             st.rerun()
 
-    # ------------------ 🆕 새로운 입고 의뢰 작성 페이지 ------------------
+    # ------------------ 작업 시작/종료 (작업자) 상황판 화면 ------------------
+    elif st.session_state['page'] == 'worker_dashboard':
+        st.subheader("🛠️ 작업 시작/종료 상황판")
+        
+        client = get_google_client()
+        board_sheet = client.open("수령 목록82").worksheet("상황판")
+        raw_data = board_sheet.get_all_values()
+        
+        if len(raw_data) > 1:
+            df = pd.DataFrame(raw_data[1:], columns=raw_data[0])
+            df['sheet_row_idx'] = range(2, len(df) + 2)
+            
+            df_display = df.tail(10).copy()
+            display_cols = df_display.iloc[:, [2, 3, 5, 6]]
+            display_cols.columns = ["부서", "품명", "일련번호", "상태"]
+            
+            event = st.dataframe(
+                display_cols,
+                use_container_width=True,
+                hide_index=True,
+                selection_mode="single-row",
+                on_select="rerun"
+            )
+            selected_indices = event.selection.rows
+        else:
+            st.info("현재 등록된 데이터가 없습니다.")
+            selected_indices = []
+            df_display = None
+            
+        st.write("---")
+        
+        c1, c2, c3 = st.columns(3)
+
+        with c1:
+            if st.button("선택", use_container_width=True):
+                if len(selected_indices) == 0:
+                    st.warning("표에서 항목을 먼저 선택하세요.")
+                else:
+                    selected_row = df_display.iloc[selected_indices[0]]
+                    idx_in_raw = int(selected_row['sheet_row_idx']) - 1
+                    dialog_worker_action(raw_data[idx_in_raw], int(selected_row['sheet_row_idx']))
+        with c2:
+            if st.button("상태확인", use_container_width=True):
+                if len(selected_indices) == 0:
+                    st.warning("표에서 항목을 먼저 선택하세요.")
+                else:
+                    selected_row = df_display.iloc[selected_indices[0]]
+                    idx_in_raw = int(selected_row['sheet_row_idx']) - 1
+                    dialog_status_check(raw_data[idx_in_raw], int(selected_row['sheet_row_idx']))
+        with c3:
+            if st.button("⬅️ 뒤로가기", use_container_width=True):
+                st.session_state['page'] = 'main'
+                st.rerun()
+
+    # ------------------ 새로운 입고 의뢰 작성 페이지 ------------------
     elif st.session_state['page'] == 'create_inbound':
         st.subheader("📝 새로운 입고 의뢰 작성")
         st.write("---")
@@ -360,7 +496,6 @@ else:
         serial_num = st.text_input("일련번호", key="create_serial", placeholder="일련번호를 입력하세요")
 
         st.write("")
-        # 💡 버그 없이 완벽하게 작동하는 달력 (초기값 빈칸)
         req_date = st.date_input("📆 요구일자 (클릭하여 선택)", value=None, format="YYYY/MM/DD")
 
         st.write("---")
@@ -392,7 +527,6 @@ else:
                             board_sheet.append_row(new_row)
                             st.success("입고 생성 완료!")
                             
-                            # 처리가 끝나면 상황판 화면으로 자동 복귀
                             st.session_state['page'] = 'inbound_outbound'
                             st.rerun()
                         except Exception as e:
@@ -400,7 +534,6 @@ else:
 
         with col2_btn:
             if st.button("취소", use_container_width=True):
-                # 취소 시에도 상황판 화면으로 복귀
                 st.session_state['page'] = 'inbound_outbound'
                 st.rerun()
 
@@ -409,7 +542,7 @@ else:
         st.title("🔐 비밀번호 변경")
         new_pw = st.text_input("재설정 비밀번호", type="password")
         new_pw_confirm = st.text_input("재설정 비밀번호 확인", type="password")
-       
+        
         st.write("")
         col1, col2 = st.columns(2)
         with col1:
