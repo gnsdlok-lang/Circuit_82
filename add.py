@@ -1,11 +1,13 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta, timezone, date
+from datetime import datetime, timedelta, timezone
 import gspread
+from gspread import Cell  # 일괄 업데이트(Batch Update)를 위해 추가
 from google.oauth2.service_account import Credentials
 import json
 import hashlib
-import time  # 로딩 효과를 위해 추가
+import time
+import uuid  # 동시성 에러 방지를 위한 고유 ID 생성용
 
 KST = timezone(timedelta(hours=9))
 
@@ -37,14 +39,12 @@ def get_google_client():
     )
     return gspread.authorize(creds)
 
-# 🚀 속도 개선 1: 상황판 데이터를 메모리에 20초간 캐싱 (ttl=20으로 변경)
 @st.cache_data(ttl=20, show_spinner=False)
 def get_cached_board_data():
     client = get_google_client()
     board_sheet = client.open("수령 목록82").worksheet("상황판")
     return board_sheet.get_all_values()
 
-# 🚀 속도 개선 2: 부서 목록 데이터를 메모리에 10분간 캐싱
 @st.cache_data(ttl=600, show_spinner=False)
 def get_cached_dept_data():
     client = get_google_client()
@@ -53,6 +53,20 @@ def get_cached_dept_data():
 
 def make_hash(password):
     return hashlib.sha256(password.encode()).hexdigest()
+
+# 💡 개선 1: 고유 ID(UUID)를 이용해 시트에서 정확한 행을 찾는 함수
+def get_exact_row_idx(sheet, row_data, fallback_idx):
+    # UUID는 16번째 열(인덱스 15)에 저장됨
+    if len(row_data) > 15 and str(row_data[15]).strip():
+        uuid_str = str(row_data[15]).strip()
+        try:
+            # 16번째 열(P열)에서 UUID 검색
+            cell = sheet.find(uuid_str, in_column=16)
+            if cell:
+                return cell.row
+        except Exception:
+            pass
+    return fallback_idx # UUID가 없는 과거 데이터의 경우 기존 번호 반환
 
 # ==========================================
 # 2. Dialog 함수들
@@ -88,14 +102,16 @@ def confirm_password_change(new_pw):
             st.rerun()
 
 @st.dialog("입고 확인")
-def dialog_confirm_inbound(sheet_row_idx):
+def dialog_confirm_inbound(row_data, sheet_row_idx):
     st.write("정말 입고 처리하시겠습니까?")
     col1, col2 = st.columns(2)
     with col1:
         if st.button("확인", use_container_width=True, type="primary"):
             client = get_google_client()
             board_sheet = client.open("수령 목록82").worksheet("상황판")
-            board_sheet.update_cell(sheet_row_idx, 7, 2)
+            # UUID를 통해 행을 찾아 동시성 문제 차단
+            row_idx = get_exact_row_idx(board_sheet, row_data, sheet_row_idx)
+            board_sheet.update_cell(row_idx, 7, 2)
             
             get_cached_board_data.clear() 
             st.success("입고 처리 완료!")
@@ -105,17 +121,24 @@ def dialog_confirm_inbound(sheet_row_idx):
             st.rerun()
 
 @st.dialog("수령 확인")
-def dialog_confirm_receipt(sheet_row_idx):
+def dialog_confirm_receipt(row_data, sheet_row_idx):
     st.write("정말 완료수령 처리하시겠습니까?")
     col1, col2 = st.columns(2)
     with col1:
         if st.button("확인", use_container_width=True, type="primary"):
             client = get_google_client()
             board_sheet = client.open("수령 목록82").worksheet("상황판")
+            row_idx = get_exact_row_idx(board_sheet, row_data, sheet_row_idx)
+            
             current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-            board_sheet.update_cell(sheet_row_idx, 7, 5) 
-            board_sheet.update_cell(sheet_row_idx, 12, current_time_str) 
-            board_sheet.update_cell(sheet_row_idx, 15, st.session_state.get('user_name', '알수없음')) 
+            
+            # 💡 개선 2: 일괄 업데이트(Batch Update)로 속도 대폭 상승
+            cells_to_update = [
+                Cell(row=row_idx, col=7, value=5),
+                Cell(row=row_idx, col=12, value=current_time_str),
+                Cell(row=row_idx, col=15, value=st.session_state.get('user_name', '알수없음'))
+            ]
+            board_sheet.update_cells(cells_to_update)
             
             get_cached_board_data.clear() 
             st.success("수령 처리 완료!")
@@ -154,7 +177,8 @@ def dialog_status_check(row_data, sheet_row_idx):
                 if st.button("최종 삭제", use_container_width=True):
                     client = get_google_client()
                     board_sheet = client.open("수령 목록82").worksheet("상황판")
-                    board_sheet.delete_rows(sheet_row_idx)
+                    row_idx = get_exact_row_idx(board_sheet, row_data, sheet_row_idx)
+                    board_sheet.delete_rows(row_idx)
                     
                     get_cached_board_data.clear() 
                     st.session_state.confirm_delete = False
@@ -211,10 +235,16 @@ def dialog_worker_action(row_data, sheet_row_idx):
             if st.button("최종 시작", use_container_width=True, type="primary"):
                 client = get_google_client()
                 board_sheet = client.open("수령 목록82").worksheet("상황판")
+                row_idx = get_exact_row_idx(board_sheet, row_data, sheet_row_idx)
                 current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-                board_sheet.update_cell(sheet_row_idx, 7, 3) 
-                board_sheet.update_cell(sheet_row_idx, 10, current_time_str) 
-                board_sheet.update_cell(sheet_row_idx, 13, st.session_state.get('user_name', '알수없음')) 
+                
+                # Batch Update 적용
+                cells = [
+                    Cell(row=row_idx, col=7, value=3),
+                    Cell(row=row_idx, col=10, value=current_time_str),
+                    Cell(row=row_idx, col=13, value=st.session_state.get('user_name', '알수없음'))
+                ]
+                board_sheet.update_cells(cells) 
                 
                 get_cached_board_data.clear() 
                 st.session_state.worker_confirm = None
@@ -230,10 +260,16 @@ def dialog_worker_action(row_data, sheet_row_idx):
             if st.button("최종 종료", use_container_width=True, type="primary"):
                 client = get_google_client()
                 board_sheet = client.open("수령 목록82").worksheet("상황판")
+                row_idx = get_exact_row_idx(board_sheet, row_data, sheet_row_idx)
                 current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-                board_sheet.update_cell(sheet_row_idx, 7, 4) 
-                board_sheet.update_cell(sheet_row_idx, 11, current_time_str) 
-                board_sheet.update_cell(sheet_row_idx, 14, st.session_state.get('user_name', '알수없음')) 
+                
+                # Batch Update 적용
+                cells = [
+                    Cell(row=row_idx, col=7, value=4),
+                    Cell(row=row_idx, col=11, value=current_time_str),
+                    Cell(row=row_idx, col=14, value=st.session_state.get('user_name', '알수없음'))
+                ]
+                board_sheet.update_cells(cells)
                 
                 get_cached_board_data.clear() 
                 st.session_state.worker_confirm = None
@@ -289,7 +325,6 @@ if not st.session_state['logged_in']:
                 st.session_state['lockout_until'] = None
             
             if user_id and user_pw:
-                # 💡 로딩 문구 변경
                 with st.spinner('로그인 중... (데이터 동기화)'):
                     try:
                         client = get_google_client()
@@ -311,11 +346,8 @@ if not st.session_state['logged_in']:
                                     
                         if login_success:
                             st.session_state['login_attempts'] = 0
-                            
-                            # 💡 핵심: 로그인 성공 직후 백그라운드에서 데이터를 캐싱 (로딩 스피너가 도는 동안 진행됨)
                             get_cached_board_data()
                             get_cached_dept_data()
-                            
                             st.rerun()
                         else:
                             st.session_state['login_attempts'] += 1
@@ -389,20 +421,49 @@ else:
         raw_data = get_cached_board_data()
         
         if len(raw_data) > 1:
-            df = pd.DataFrame(raw_data[1:], columns=raw_data[0])
-            df['sheet_row_idx'] = range(2, len(df) + 2)
+            # 💡 개선 3: 데이터 동적 필터링 및 UI 개선
+            df = pd.DataFrame(raw_data[1:])
+            df.columns = [str(i) for i in range(len(df.columns))]
+            df['sheet_row_idx'] = df.index + 2  # 원본 시트에서의 행 번호 기억
             
-            df_display = df.tail(10).copy()
-            display_cols = df_display.iloc[:, [2, 3, 5, 6]].copy()
-            display_cols.columns = ["부서", "품명", "일련번호", "상태"]
+            # 검색 및 필터링 UI
+            col_f1, col_f2 = st.columns([2.5, 1])
+            with col_f1:
+                search_query = st.text_input("🔍 품명, 부서, 일련번호 검색", "", key="search_inbound")
+            with col_f2:
+                st.write("") # 줄맞춤
+                st.write("")
+                show_completed = st.checkbox("✅ 완료 포함", value=False, key="check_inbound")
+                
+            # 완료 항목 필터링 (수령완료=5)
+            if '6' in df.columns:
+                if not show_completed:
+                    df = df[df['6'].astype(str).str.strip() != '5']
             
-            status_map_inbound = {
-                '1': '임시', '2': '입고', '3': '작업중', '4': '수령대기', '5': '수령완료'
-            }
-            display_cols['상태'] = display_cols['상태'].astype(str).str.strip().map(status_map_inbound).fillna(display_cols['상태'])
+            # 텍스트 검색 필터링
+            if search_query:
+                mask = False
+                if '2' in df.columns: mask |= df['2'].astype(str).str.contains(search_query, case=False)
+                if '3' in df.columns: mask |= df['3'].astype(str).str.contains(search_query, case=False)
+                if '5' in df.columns: mask |= df['5'].astype(str).str.contains(search_query, case=False)
+                df = df[mask]
+                
+            # 최신 데이터가 위로 오게 정렬
+            df = df.iloc[::-1]
+
+            display_df = pd.DataFrame()
+            display_df["부서"] = df['2'] if '2' in df.columns else ""
+            display_df["품명"] = df['3'] if '3' in df.columns else ""
+            display_df["일련번호"] = df['5'] if '5' in df.columns else ""
             
+            # 상태 표시 이모지 매핑
+            status_map_inbound = {'1': '⏳ 임시', '2': '📦 입고', '3': '▶️ 작업중', '4': '🟢 수령대기', '5': '✅ 수령완료'}
+            if '6' in df.columns:
+                display_df["상태"] = df['6'].astype(str).str.strip().map(status_map_inbound).fillna(df['6'])
+
+            st.caption("※ 표의 가장 왼쪽 체크박스를 눌러 항목을 선택하세요.")
             event = st.dataframe(
-                display_cols,
+                display_df,
                 use_container_width=True,
                 hide_index=True,
                 selection_mode="single-row",
@@ -412,7 +473,7 @@ else:
         else:
             st.info("현재 등록된 데이터가 없습니다.")
             selected_indices = []
-            df_display = None
+            df = pd.DataFrame()
             
         st.write("---")
         
@@ -428,12 +489,13 @@ else:
                 if len(selected_indices) == 0:
                     st.warning("표에서 항목을 먼저 선택하세요.")
                 else:
-                    selected_row = df_display.iloc[selected_indices[0]]
-                    idx_in_raw = int(selected_row['sheet_row_idx']) - 1
-                    raw_status = str(raw_data[idx_in_raw][6]).strip() 
+                    actual_row = df.iloc[selected_indices[0]]
+                    sheet_row_idx = int(actual_row['sheet_row_idx'])
+                    row_data = raw_data[sheet_row_idx - 2]
+                    raw_status = str(row_data[6]).strip() 
                     
                     if raw_status == '1':
-                        dialog_confirm_inbound(int(selected_row['sheet_row_idx']))
+                        dialog_confirm_inbound(row_data, sheet_row_idx)
                     else:
                         st.error("상태가 (임시)가 아닙니다")
 
@@ -442,12 +504,13 @@ else:
                 if len(selected_indices) == 0:
                     st.warning("표에서 항목을 먼저 선택하세요.")
                 else:
-                    selected_row = df_display.iloc[selected_indices[0]]
-                    idx_in_raw = int(selected_row['sheet_row_idx']) - 1
-                    raw_status = str(raw_data[idx_in_raw][6]).strip()
+                    actual_row = df.iloc[selected_indices[0]]
+                    sheet_row_idx = int(actual_row['sheet_row_idx'])
+                    row_data = raw_data[sheet_row_idx - 2]
+                    raw_status = str(row_data[6]).strip()
                     
                     if raw_status == '4':
-                        dialog_confirm_receipt(int(selected_row['sheet_row_idx']))
+                        dialog_confirm_receipt(row_data, sheet_row_idx)
                     else:
                         st.error("상태가 (수령대기)가 아닙니다")
 
@@ -456,9 +519,10 @@ else:
                 if len(selected_indices) == 0:
                     st.warning("표에서 항목을 먼저 선택하세요.")
                 else:
-                    selected_row = df_display.iloc[selected_indices[0]]
-                    idx_in_raw = int(selected_row['sheet_row_idx']) - 1
-                    dialog_status_check(raw_data[idx_in_raw], int(selected_row['sheet_row_idx']))
+                    actual_row = df.iloc[selected_indices[0]]
+                    sheet_row_idx = int(actual_row['sheet_row_idx'])
+                    row_data = raw_data[sheet_row_idx - 2]
+                    dialog_status_check(row_data, sheet_row_idx)
 
         st.write("")
         col_btn1, col_btn2 = st.columns([1, 4])
@@ -478,20 +542,44 @@ else:
         raw_data = get_cached_board_data()
         
         if len(raw_data) > 1:
-            df = pd.DataFrame(raw_data[1:], columns=raw_data[0])
-            df['sheet_row_idx'] = range(2, len(df) + 2)
+            df = pd.DataFrame(raw_data[1:])
+            df.columns = [str(i) for i in range(len(df.columns))]
+            df['sheet_row_idx'] = df.index + 2 
             
-            df_display = df.tail(10).copy()
-            display_cols = df_display.iloc[:, [2, 3, 5, 6]].copy()
-            display_cols.columns = ["부서", "품명", "일련번호", "상태"]
+            col_f1, col_f2 = st.columns([2.5, 1])
+            with col_f1:
+                search_query = st.text_input("🔍 품명, 부서, 일련번호 검색", "", key="search_worker")
+            with col_f2:
+                st.write("")
+                st.write("")
+                show_completed = st.checkbox("✅ 완료 포함", value=False, key="check_worker")
+                
+            if '6' in df.columns:
+                if not show_completed:
+                    # 작업자는 '임시(1)'와 완전히 끝난 '수령완료/출고완료(5)'를 숨김
+                    df = df[~df['6'].astype(str).str.strip().isin(['1', '5'])]
             
-            status_map_worker = {
-                '1': '임시', '2': '작업대기', '3': '작업중', '4': '작업완료', '5': '출고완료'
-            }
-            display_cols['상태'] = display_cols['상태'].astype(str).str.strip().map(status_map_worker).fillna(display_cols['상태'])
+            if search_query:
+                mask = False
+                if '2' in df.columns: mask |= df['2'].astype(str).str.contains(search_query, case=False)
+                if '3' in df.columns: mask |= df['3'].astype(str).str.contains(search_query, case=False)
+                if '5' in df.columns: mask |= df['5'].astype(str).str.contains(search_query, case=False)
+                df = df[mask]
+                
+            df = df.iloc[::-1]
+
+            display_df = pd.DataFrame()
+            display_df["부서"] = df['2'] if '2' in df.columns else ""
+            display_df["품명"] = df['3'] if '3' in df.columns else ""
+            display_df["일련번호"] = df['5'] if '5' in df.columns else ""
             
+            status_map_worker = {'1': '⏳ 임시', '2': '📦 작업대기', '3': '▶️ 작업중', '4': '🟢 작업완료', '5': '✅ 출고완료'}
+            if '6' in df.columns:
+                display_df["상태"] = df['6'].astype(str).str.strip().map(status_map_worker).fillna(df['6'])
+
+            st.caption("※ 표의 가장 왼쪽 체크박스를 눌러 항목을 선택하세요.")
             event = st.dataframe(
-                display_cols,
+                display_df,
                 use_container_width=True,
                 hide_index=True,
                 selection_mode="single-row",
@@ -501,7 +589,7 @@ else:
         else:
             st.info("현재 등록된 데이터가 없습니다.")
             selected_indices = []
-            df_display = None
+            df = pd.DataFrame()
             
         st.write("---")
         
@@ -512,21 +600,23 @@ else:
                 if len(selected_indices) == 0:
                     st.warning("표에서 항목을 먼저 선택하세요.")
                 else:
-                    selected_row = df_display.iloc[selected_indices[0]]
-                    idx_in_raw = int(selected_row['sheet_row_idx']) - 1
+                    actual_row = df.iloc[selected_indices[0]]
+                    sheet_row_idx = int(actual_row['sheet_row_idx'])
+                    row_data = raw_data[sheet_row_idx - 2]
                     
                     st.session_state.worker_confirm = None
-                    dialog_worker_action(raw_data[idx_in_raw], int(selected_row['sheet_row_idx']))
+                    dialog_worker_action(row_data, sheet_row_idx)
         with c2:
             if st.button("상태확인", use_container_width=True):
                 if len(selected_indices) == 0:
                     st.warning("표에서 항목을 먼저 선택하세요.")
                 else:
-                    selected_row = df_display.iloc[selected_indices[0]]
-                    idx_in_raw = int(selected_row['sheet_row_idx']) - 1
+                    actual_row = df.iloc[selected_indices[0]]
+                    sheet_row_idx = int(actual_row['sheet_row_idx'])
+                    row_data = raw_data[sheet_row_idx - 2]
                     
                     st.session_state.confirm_delete = False
-                    dialog_status_check(raw_data[idx_in_raw], int(selected_row['sheet_row_idx']))
+                    dialog_status_check(row_data, sheet_row_idx)
         with c3:
             pass # 여백
 
@@ -588,10 +678,12 @@ else:
                             req_datetime_str = f"{req_date_str} 13:00"
                             current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
 
+                            # 💡 개선 1: 배열 마지막에 16번째 열(P열)로 활용될 UUID 삽입
                             new_row = [
                                 next_seq, selected_factory, selected_dept, item_name.strip(),
                                 st.session_state.get('user_name', ''), serial_num.strip(), 1,
-                                current_time_str, req_datetime_str, "", "", ""
+                                current_time_str, req_datetime_str, "", "", "", "", "", "",
+                                str(uuid.uuid4())
                             ]
                             board_sheet.append_row(new_row)
                             
