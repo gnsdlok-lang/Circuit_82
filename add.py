@@ -22,9 +22,9 @@ footer {visibility: hidden;}
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 # ==========================================
-# 1. 구글 스프레드시트 연결 및 유틸 함수
+# 1. 구글 스프레드시트 연결 및 캐싱 함수
 # ==========================================
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def get_google_client():
     key_dict = json.loads(st.secrets["gcp_service_account"])
     creds = Credentials.from_service_account_info(
@@ -35,6 +35,20 @@ def get_google_client():
         ]
     )
     return gspread.authorize(creds)
+
+# 🚀 속도 개선 1: 상황판 데이터를 메모리에 5초간 캐싱 (업데이트 시 즉시 초기화됨)
+@st.cache_data(ttl=5, show_spinner=False)
+def get_cached_board_data():
+    client = get_google_client()
+    board_sheet = client.open("수령 목록82").worksheet("상황판")
+    return board_sheet.get_all_values()
+
+# 🚀 속도 개선 2: 부서 목록 데이터를 메모리에 10분간 캐싱
+@st.cache_data(ttl=600, show_spinner=False)
+def get_cached_dept_data():
+    client = get_google_client()
+    dept_sheet = client.open("수령 목록82").worksheet("부서")
+    return dept_sheet.get_all_values()
 
 def make_hash(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -81,6 +95,8 @@ def dialog_confirm_inbound(sheet_row_idx):
             client = get_google_client()
             board_sheet = client.open("수령 목록82").worksheet("상황판")
             board_sheet.update_cell(sheet_row_idx, 7, 2)
+            
+            get_cached_board_data.clear() # 🚀 데이터 변경 시 캐시 지우기 (최신화)
             st.success("입고 처리 완료!")
             st.rerun()
     with col2:
@@ -96,9 +112,11 @@ def dialog_confirm_receipt(sheet_row_idx):
             client = get_google_client()
             board_sheet = client.open("수령 목록82").worksheet("상황판")
             current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-            board_sheet.update_cell(sheet_row_idx, 7, 5) # 상태 5로 변경
-            board_sheet.update_cell(sheet_row_idx, 12, current_time_str) # 12열: 수령일자
-            board_sheet.update_cell(sheet_row_idx, 15, st.session_state.get('user_name', '알수없음')) # 15열: 수령 처리한 로그인 유저
+            board_sheet.update_cell(sheet_row_idx, 7, 5) 
+            board_sheet.update_cell(sheet_row_idx, 12, current_time_str) 
+            board_sheet.update_cell(sheet_row_idx, 15, st.session_state.get('user_name', '알수없음')) 
+            
+            get_cached_board_data.clear() # 🚀 최신화
             st.success("수령 처리 완료!")
             st.rerun()
     with col2:
@@ -136,12 +154,14 @@ def dialog_status_check(row_data, sheet_row_idx):
                     client = get_google_client()
                     board_sheet = client.open("수령 목록82").worksheet("상황판")
                     board_sheet.delete_rows(sheet_row_idx)
+                    
+                    get_cached_board_data.clear() # 🚀 최신화
                     st.session_state.confirm_delete = False
                     st.success("삭제 완료")
                     st.rerun() 
         else:
             st.button("삭제", use_container_width=True, disabled=True)
-            st.caption("※ 상태가 (임시)일 때만 삭제 가능합니다.")
+            st.caption("※ 상태가 1(임시)일 때만 삭제 가능합니다.")
             
     with col2:
         if st.button("뒤로가기", use_container_width=True):
@@ -187,13 +207,15 @@ def dialog_worker_action(row_data, sheet_row_idx):
         st.warning("정말 작업을 시작하시겠습니까?")
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("시작확인", use_container_width=True, type="primary"):
+            if st.button("최종 시작", use_container_width=True, type="primary"):
                 client = get_google_client()
                 board_sheet = client.open("수령 목록82").worksheet("상황판")
                 current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
                 board_sheet.update_cell(sheet_row_idx, 7, 3) 
                 board_sheet.update_cell(sheet_row_idx, 10, current_time_str) 
                 board_sheet.update_cell(sheet_row_idx, 13, st.session_state.get('user_name', '알수없음')) 
+                
+                get_cached_board_data.clear() # 🚀 최신화
                 st.session_state.worker_confirm = None
                 st.success("작업 시작 처리 완료!")
                 st.rerun() 
@@ -211,6 +233,8 @@ def dialog_worker_action(row_data, sheet_row_idx):
                 board_sheet.update_cell(sheet_row_idx, 7, 4) 
                 board_sheet.update_cell(sheet_row_idx, 11, current_time_str) 
                 board_sheet.update_cell(sheet_row_idx, 14, st.session_state.get('user_name', '알수없음')) 
+                
+                get_cached_board_data.clear() # 🚀 최신화
                 st.session_state.worker_confirm = None
                 st.success("작업 종료 처리 완료!")
                 st.rerun() 
@@ -310,15 +334,13 @@ else:
         elif st.session_state['user_level'] == "3":
             level_str = "관리자"
             
-        # UX 개선: 환영 문구 및 현재 권한 안내
         st.markdown(f"### 👋 **{st.session_state['user_name']}**님, 환영합니다!")
         st.caption(f"현재 로그인된 계정 권한: **{level_str}**")
         st.write("---")
         
         st.markdown("#### 📌 원하시는 업무를 선택해주세요")
-        st.write("") # 간격
+        st.write("") 
         
-        # UX 개선: 버튼에 직관적인 아이콘 추가 및 배치 정렬
         if st.session_state['user_level'] == "3":
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -345,7 +367,6 @@ else:
         st.markdown("<br><br>", unsafe_allow_html=True)
         st.write("---")
         
-        # 하단 설정/로그아웃 영역 (버튼 CSS 오류 수정됨)
         c1, c2 = st.columns(2)
         with c1:
             if st.button("🔐 비밀번호 변경", use_container_width=True):
@@ -358,9 +379,8 @@ else:
     elif st.session_state['page'] == 'inbound_outbound':
         st.subheader("📦 입고/수령 상황판")
         
-        client = get_google_client()
-        board_sheet = client.open("수령 목록82").worksheet("상황판")
-        raw_data = board_sheet.get_all_values()
+        # 🚀 스프레드시트 직접 연결 대신 저장해둔 캐시 메모리에서 즉시 불러오기
+        raw_data = get_cached_board_data()
         
         if len(raw_data) > 1:
             df = pd.DataFrame(raw_data[1:], columns=raw_data[0])
@@ -370,7 +390,6 @@ else:
             display_cols = df_display.iloc[:, [2, 3, 5, 6]].copy()
             display_cols.columns = ["부서", "품명", "일련번호", "상태"]
             
-            # 💡 의뢰자용 상태 매핑 적용 (1~5 숫자를 텍스트로 변환)
             status_map_inbound = {
                 '1': '임시', '2': '입고', '3': '작업중', '4': '수령대기', '5': '수령완료'
             }
@@ -405,12 +424,12 @@ else:
                 else:
                     selected_row = df_display.iloc[selected_indices[0]]
                     idx_in_raw = int(selected_row['sheet_row_idx']) - 1
-                    raw_status = str(raw_data[idx_in_raw][6]).strip() # 스프레드시트의 원본 상태값 읽기
+                    raw_status = str(raw_data[idx_in_raw][6]).strip()
                     
                     if raw_status == '1':
                         dialog_confirm_inbound(int(selected_row['sheet_row_idx']))
                     else:
-                        st.error("상태가 (임시)가 아닙니다")
+                        st.error("상태가 임시(1)가 아닙니다")
 
         with c3:
             if st.button("수령", use_container_width=True):
@@ -424,7 +443,7 @@ else:
                     if raw_status == '4':
                         dialog_confirm_receipt(int(selected_row['sheet_row_idx']))
                     else:
-                        st.error("상태가 (수령대기)가 아닙니다")
+                        st.error("상태가 수령대기(4)가 아닙니다")
 
         with c4:
             if st.button("상태확인", use_container_width=True):
@@ -436,17 +455,22 @@ else:
                     dialog_status_check(raw_data[idx_in_raw], int(selected_row['sheet_row_idx']))
 
         st.write("")
-        if st.button("⬅️ 메인으로 돌아가기", use_container_width=True):
-            st.session_state['page'] = 'main'
-            st.rerun()
+        col_btn1, col_btn2 = st.columns([1, 4])
+        with col_btn1:
+            if st.button("🔄 새로고침", use_container_width=True):
+                get_cached_board_data.clear()
+                st.rerun()
+        with col_btn2:
+            if st.button("⬅️ 메인으로 돌아가기", use_container_width=True):
+                st.session_state['page'] = 'main'
+                st.rerun()
 
     # ------------------ 작업 시작/종료 (작업자용) ------------------
     elif st.session_state['page'] == 'worker_dashboard':
         st.subheader("🛠️ 작업 시작/종료 상황판")
         
-        client = get_google_client()
-        board_sheet = client.open("수령 목록82").worksheet("상황판")
-        raw_data = board_sheet.get_all_values()
+        # 🚀 스프레드시트 직접 연결 대신 저장해둔 캐시 메모리에서 즉시 불러오기
+        raw_data = get_cached_board_data()
         
         if len(raw_data) > 1:
             df = pd.DataFrame(raw_data[1:], columns=raw_data[0])
@@ -456,7 +480,6 @@ else:
             display_cols = df_display.iloc[:, [2, 3, 5, 6]].copy()
             display_cols.columns = ["부서", "품명", "일련번호", "상태"]
             
-            # 💡 작업자용 상태 매핑 적용 (1~5 숫자를 텍스트로 변환)
             status_map_worker = {
                 '1': '임시', '2': '작업대기', '3': '작업중', '4': '작업완료', '5': '출고완료'
             }
@@ -500,7 +523,16 @@ else:
                     st.session_state.confirm_delete = False
                     dialog_status_check(raw_data[idx_in_raw], int(selected_row['sheet_row_idx']))
         with c3:
-            if st.button("⬅️ 뒤로가기", use_container_width=True):
+            pass # 여백
+
+        st.write("")
+        col_btn1, col_btn2 = st.columns([1, 4])
+        with col_btn1:
+            if st.button("🔄 새로고침", use_container_width=True):
+                get_cached_board_data.clear()
+                st.rerun()
+        with col_btn2:
+            if st.button("⬅️ 메인으로 돌아가기", use_container_width=True):
                 st.session_state['page'] = 'main'
                 st.rerun()
 
@@ -513,9 +545,8 @@ else:
         selected_factory = st.selectbox("공장", factory_list, key="create_factory")
 
         try:
-            client = get_google_client()
-            dept_sheet = client.open("수령 목록82").worksheet("부서")
-            dept_data = dept_sheet.get_all_values()
+            # 🚀 스프레드시트 직접 연결 대신 저장해둔 캐시 메모리에서 즉시 불러오기
+            dept_data = get_cached_dept_data()
             valid_depts = [row[1] for row in dept_data if len(row) > 1 and row[0] == selected_factory]
         except Exception as e:
             st.error(f"부서 로딩 실패: {e}")
@@ -559,6 +590,8 @@ else:
                                 current_time_str, req_datetime_str, "", "", ""
                             ]
                             board_sheet.append_row(new_row)
+                            
+                            get_cached_board_data.clear() # 🚀 등록 완료 후 캐시 지우기 (최신화)
                             st.success("입고 생성 완료!")
                             
                             st.session_state['page'] = 'inbound_outbound'
