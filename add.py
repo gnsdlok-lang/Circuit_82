@@ -141,7 +141,7 @@ def dialog_status_check(row_data, sheet_row_idx):
                     st.rerun() 
         else:
             st.button("삭제", use_container_width=True, disabled=True)
-            st.caption("※ 상태가 1(임시)일 때만 삭제 가능합니다.")
+            st.caption("※ 상태가 (임시)일 때만 삭제 가능합니다.")
             
     with col2:
         if st.button("뒤로가기", use_container_width=True):
@@ -404,7 +404,7 @@ else:
                     if raw_status == '1':
                         dialog_confirm_inbound(int(selected_row['sheet_row_idx']))
                     else:
-                        st.error("상태가 임시(1)가 아닙니다")
+                        st.error("상태가 (임시)가 아닙니다")
 
         with c3:
             if st.button("수령", use_container_width=True):
@@ -418,7 +418,7 @@ else:
                     if raw_status == '4':
                         dialog_confirm_receipt(int(selected_row['sheet_row_idx']))
                     else:
-                        st.error("상태가 수령대기(4)가 아닙니다")
+                        st.error("상태가 (수령대기)가 아닙니다")
 
         with c4:
             if st.button("상태확인", use_container_width=True):
