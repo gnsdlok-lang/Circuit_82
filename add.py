@@ -121,14 +121,15 @@ def dialog_status_check(row_data, sheet_row_idx):
     
     if "confirm_delete" not in st.session_state:
         st.session_state.confirm_delete = False
-        
+
+    def set_delete():
+        st.session_state.confirm_delete = True
+
     col1, col2 = st.columns(2)
     with col1:
-        if row_data[6] == '1':
+        if str(row_data[6]).strip() == '1':
             if not st.session_state.confirm_delete:
-                if st.button("삭제", use_container_width=True, type="primary"):
-                    st.session_state.confirm_delete = True
-                    st.rerun()
+                st.button("삭제", use_container_width=True, type="primary", on_click=set_delete)
             else:
                 st.warning("정말 삭제할까요?")
                 if st.button("최종 삭제", use_container_width=True):
@@ -137,10 +138,9 @@ def dialog_status_check(row_data, sheet_row_idx):
                     board_sheet.delete_rows(sheet_row_idx)
                     st.session_state.confirm_delete = False
                     st.success("삭제 완료")
-                    st.rerun()
+                    st.rerun() # 정상 처리 후에는 닫기 위해 rerun
         else:
-            if st.button("삭제", use_container_width=True, disabled=True):
-                pass
+            st.button("삭제", use_container_width=True, disabled=True)
             st.caption("※ 상태가 1일 때만 삭제 가능합니다.")
             
     with col2:
@@ -161,11 +161,30 @@ def dialog_worker_action(row_data, sheet_row_idx):
     
     st.write("---")
     
-    # 상태 저장을 위한 session_state 초기화
     if "worker_confirm" not in st.session_state:
         st.session_state.worker_confirm = None
 
-    # 1. 시작 버튼을 눌러서 확인 중일 때의 화면
+    # 다이얼로그 안에서 창이 안꺼지도록 하는 콜백 함수들
+    def click_start():
+        status = str(row_data[6]).strip()
+        start_time = str(row_data[9]).strip() if len(row_data)>9 else ""
+        if status == '2' and start_time == "":
+            st.session_state.worker_confirm = "start"
+        else:
+            st.session_state.worker_confirm = "error"
+
+    def click_end():
+        status = str(row_data[6]).strip()
+        end_time = str(row_data[10]).strip() if len(row_data)>10 else ""
+        if status == '3' and end_time == "":
+            st.session_state.worker_confirm = "end"
+        else:
+            st.session_state.worker_confirm = "error"
+
+    def click_cancel():
+        st.session_state.worker_confirm = None
+
+    # 화면 분기
     if st.session_state.worker_confirm == "start":
         st.warning("정말 작업을 시작하시겠습니까?")
         c1, c2 = st.columns(2)
@@ -174,18 +193,15 @@ def dialog_worker_action(row_data, sheet_row_idx):
                 client = get_google_client()
                 board_sheet = client.open("수령 목록82").worksheet("상황판")
                 current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-                board_sheet.update_cell(sheet_row_idx, 7, 3) # 7열 상태 3으로 변경
-                board_sheet.update_cell(sheet_row_idx, 10, current_time_str) # 10열: 작업시작 시간
-                board_sheet.update_cell(sheet_row_idx, 13, st.session_state.get('user_name', '알수없음')) # 13열: 로그인 유저
+                board_sheet.update_cell(sheet_row_idx, 7, 3) # 상태 3 변경
+                board_sheet.update_cell(sheet_row_idx, 10, current_time_str) # 10열 작업시작
+                board_sheet.update_cell(sheet_row_idx, 13, st.session_state.get('user_name', '알수없음')) 
                 st.session_state.worker_confirm = None
                 st.success("작업 시작 처리 완료!")
-                st.rerun()
+                st.rerun() 
         with c2:
-            if st.button("취소", use_container_width=True):
-                st.session_state.worker_confirm = None
-                st.rerun()
-                
-    # 2. 종료 버튼을 눌러서 확인 중일 때의 화면
+            st.button("취소", use_container_width=True, on_click=click_cancel)
+            
     elif st.session_state.worker_confirm == "end":
         st.warning("정말 작업을 종료하시겠습니까?")
         c1, c2 = st.columns(2)
@@ -194,42 +210,26 @@ def dialog_worker_action(row_data, sheet_row_idx):
                 client = get_google_client()
                 board_sheet = client.open("수령 목록82").worksheet("상황판")
                 current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-                board_sheet.update_cell(sheet_row_idx, 7, 4) # 7열 상태 4로 변경
-                board_sheet.update_cell(sheet_row_idx, 11, current_time_str) # 11열: 작업종료 시간
-                board_sheet.update_cell(sheet_row_idx, 14, st.session_state.get('user_name', '알수없음')) # 14열: 로그인 유저
+                board_sheet.update_cell(sheet_row_idx, 7, 4) # 상태 4 변경
+                board_sheet.update_cell(sheet_row_idx, 11, current_time_str) # 11열 작업종료
+                board_sheet.update_cell(sheet_row_idx, 14, st.session_state.get('user_name', '알수없음')) 
                 st.session_state.worker_confirm = None
                 st.success("작업 종료 처리 완료!")
-                st.rerun()
+                st.rerun() 
         with c2:
-            if st.button("취소", use_container_width=True):
-                st.session_state.worker_confirm = None
-                st.rerun()
+            st.button("취소", use_container_width=True, on_click=click_cancel)
+            
+    elif st.session_state.worker_confirm == "error":
+        st.error("상태를 확인해주세요. (현재 상태에선 시작/종료할 수 없습니다)")
+        st.button("돌아가기", use_container_width=True, on_click=click_cancel)
 
-    # 3. 기본 화면 (처음 창을 열었을 때)
     else:
+        # 최초 기본 버튼 화면
         col1, col2, col3 = st.columns(3)
         with col1:
-            if st.button("시작", use_container_width=True, type="primary"):
-                status = str(row_data[6]) # 7열 상태
-                start_time = row_data[9] if len(row_data)>9 else "" # 10열 작업시작
-                
-                if status == '2' and start_time.strip() == "":
-                    st.session_state.worker_confirm = "start"
-                    st.rerun()
-                else:
-                    st.error("상태를 확인해주세요")
-                    
+            st.button("시작", use_container_width=True, type="primary", on_click=click_start)
         with col2:
-            if st.button("종료", use_container_width=True, type="primary"):
-                status = str(row_data[6]) # 7열 상태
-                end_time = row_data[10] if len(row_data)>10 else "" # 11열 작업종료
-                
-                if status == '3' and end_time.strip() == "":
-                    st.session_state.worker_confirm = "end"
-                    st.rerun()
-                else:
-                    st.error("상태를 확인해주세요")
-                    
+            st.button("종료", use_container_width=True, type="primary", on_click=click_end)
         with col3:
             if st.button("뒤로가기", use_container_width=True):
                 st.session_state.worker_confirm = None
@@ -395,7 +395,7 @@ else:
                     st.warning("표에서 항목을 먼저 선택하세요.")
                 else:
                     selected_row = df_display.iloc[selected_indices[0]]
-                    if str(selected_row['상태']) == '1':
+                    if str(selected_row['상태']).strip() == '1':
                         dialog_confirm_inbound(int(selected_row['sheet_row_idx']))
                     else:
                         st.error("상태가 1이 아닙니다")
@@ -406,7 +406,7 @@ else:
                     st.warning("표에서 항목을 먼저 선택하세요.")
                 else:
                     selected_row = df_display.iloc[selected_indices[0]]
-                    if str(selected_row['상태']) == '4':
+                    if str(selected_row['상태']).strip() == '4':
                         dialog_confirm_receipt(int(selected_row['sheet_row_idx']))
                     else:
                         st.error("상태가 4가 아닙니다")
@@ -476,6 +476,9 @@ else:
                 else:
                     selected_row = df_display.iloc[selected_indices[0]]
                     idx_in_raw = int(selected_row['sheet_row_idx']) - 1
+                    
+                    # 상태 확인 다이얼로그도 이전 삭제 상태 초기화
+                    st.session_state.confirm_delete = False
                     dialog_status_check(raw_data[idx_in_raw], int(selected_row['sheet_row_idx']))
         with c3:
             if st.button("⬅️ 뒤로가기", use_container_width=True):
