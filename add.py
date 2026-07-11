@@ -27,7 +27,9 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # ==========================================
 # 1. 구글 스프레드시트 연결 및 캐싱 함수
 # ==========================================
-@st.cache_resource(show_spinner=False)
+
+# 1. API 연결: max_entries를 1로 제한하여 메모리 누수 방지
+@st.cache_resource(show_spinner=False, max_entries=1)
 def get_google_client():
     key_dict = json.loads(st.secrets["gcp_service_account"])
     creds = Credentials.from_service_account_info(
@@ -39,18 +41,21 @@ def get_google_client():
     )
     return gspread.authorize(creds)
 
-# 속도 최적화: 시트 객체 자체를 캐싱하여 매번 open() 하는 시간 단축
-@st.cache_resource(show_spinner=False, ttl=3600)
+# 2. 시트 열기: ID 기반으로 변경 (제공해주신 URL의 ID 적용)
+@st.cache_resource(show_spinner=False, ttl=3600, max_entries=5)
 def get_worksheet(sheet_name):
     client = get_google_client()
-    return client.open("수령 목록82").worksheet(sheet_name)
+    # 제공해주신 시트 ID 적용 완료
+    SHEET_KEY = "1yFIOdJBe4-cBQdGPPA8lRccaPuOqx0qR_YnA-4EHt8I"
+    return client.open_by_key(SHEET_KEY).worksheet(sheet_name)
 
-@st.cache_data(ttl=20, show_spinner=False)
+# 3. 데이터 캐싱: max_entries를 추가하여 동시에 여러 메모리가 점유되는 것을 방지
+@st.cache_data(ttl=20, show_spinner=False, max_entries=1)
 def get_cached_board_data():
     board_sheet = get_worksheet("상황판")
     return board_sheet.get_all_values()
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=600, show_spinner=False, max_entries=1)
 def get_cached_dept_data():
     dept_sheet = get_worksheet("부서")
     return dept_sheet.get_all_values()
@@ -68,7 +73,7 @@ def get_exact_row_idx(sheet, row_data, fallback_idx):
         except Exception:
             pass
     return fallback_idx
-
+    
 # ==========================================
 # 2. Dialog 함수들
 # ==========================================
