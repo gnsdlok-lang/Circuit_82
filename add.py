@@ -5,6 +5,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import json
 import hashlib
+import time  # 로딩 효과를 위해 추가
 
 KST = timezone(timedelta(hours=9))
 
@@ -36,8 +37,8 @@ def get_google_client():
     )
     return gspread.authorize(creds)
 
-# 🚀 속도 개선 1: 상황판 데이터를 메모리에 5초간 캐싱 (업데이트 시 즉시 초기화됨)
-@st.cache_data(ttl=5, show_spinner=False)
+# 🚀 속도 개선 1: 상황판 데이터를 메모리에 20초간 캐싱 (ttl=20으로 변경)
+@st.cache_data(ttl=20, show_spinner=False)
 def get_cached_board_data():
     client = get_google_client()
     board_sheet = client.open("수령 목록82").worksheet("상황판")
@@ -96,7 +97,7 @@ def dialog_confirm_inbound(sheet_row_idx):
             board_sheet = client.open("수령 목록82").worksheet("상황판")
             board_sheet.update_cell(sheet_row_idx, 7, 2)
             
-            get_cached_board_data.clear() # 🚀 데이터 변경 시 캐시 지우기 (최신화)
+            get_cached_board_data.clear() 
             st.success("입고 처리 완료!")
             st.rerun()
     with col2:
@@ -116,7 +117,7 @@ def dialog_confirm_receipt(sheet_row_idx):
             board_sheet.update_cell(sheet_row_idx, 12, current_time_str) 
             board_sheet.update_cell(sheet_row_idx, 15, st.session_state.get('user_name', '알수없음')) 
             
-            get_cached_board_data.clear() # 🚀 최신화
+            get_cached_board_data.clear() 
             st.success("수령 처리 완료!")
             st.rerun()
     with col2:
@@ -155,13 +156,13 @@ def dialog_status_check(row_data, sheet_row_idx):
                     board_sheet = client.open("수령 목록82").worksheet("상황판")
                     board_sheet.delete_rows(sheet_row_idx)
                     
-                    get_cached_board_data.clear() # 🚀 최신화
+                    get_cached_board_data.clear() 
                     st.session_state.confirm_delete = False
                     st.success("삭제 완료")
                     st.rerun() 
         else:
             st.button("삭제", use_container_width=True, disabled=True)
-            st.caption("※ 상태가 1(임시)일 때만 삭제 가능합니다.")
+            st.caption("※ 상태가 (임시)일 때만 삭제 가능합니다.")
             
     with col2:
         if st.button("뒤로가기", use_container_width=True):
@@ -215,7 +216,7 @@ def dialog_worker_action(row_data, sheet_row_idx):
                 board_sheet.update_cell(sheet_row_idx, 10, current_time_str) 
                 board_sheet.update_cell(sheet_row_idx, 13, st.session_state.get('user_name', '알수없음')) 
                 
-                get_cached_board_data.clear() # 🚀 최신화
+                get_cached_board_data.clear() 
                 st.session_state.worker_confirm = None
                 st.success("작업 시작 처리 완료!")
                 st.rerun() 
@@ -234,7 +235,7 @@ def dialog_worker_action(row_data, sheet_row_idx):
                 board_sheet.update_cell(sheet_row_idx, 11, current_time_str) 
                 board_sheet.update_cell(sheet_row_idx, 14, st.session_state.get('user_name', '알수없음')) 
                 
-                get_cached_board_data.clear() # 🚀 최신화
+                get_cached_board_data.clear() 
                 st.session_state.worker_confirm = None
                 st.success("작업 종료 처리 완료!")
                 st.rerun() 
@@ -288,7 +289,8 @@ if not st.session_state['logged_in']:
                 st.session_state['lockout_until'] = None
             
             if user_id and user_pw:
-                with st.spinner('확인 중...'):
+                # 💡 로딩 문구 변경
+                with st.spinner('로그인 중... (데이터 동기화)'):
                     try:
                         client = get_google_client()
                         account_sheet = client.open("수령 목록82").worksheet("계정관리")
@@ -309,6 +311,11 @@ if not st.session_state['logged_in']:
                                     
                         if login_success:
                             st.session_state['login_attempts'] = 0
+                            
+                            # 💡 핵심: 로그인 성공 직후 백그라운드에서 데이터를 캐싱 (로딩 스피너가 도는 동안 진행됨)
+                            get_cached_board_data()
+                            get_cached_dept_data()
+                            
                             st.rerun()
                         else:
                             st.session_state['login_attempts'] += 1
@@ -379,7 +386,6 @@ else:
     elif st.session_state['page'] == 'inbound_outbound':
         st.subheader("📦 입고/수령 상황판")
         
-        # 🚀 스프레드시트 직접 연결 대신 저장해둔 캐시 메모리에서 즉시 불러오기
         raw_data = get_cached_board_data()
         
         if len(raw_data) > 1:
@@ -424,12 +430,12 @@ else:
                 else:
                     selected_row = df_display.iloc[selected_indices[0]]
                     idx_in_raw = int(selected_row['sheet_row_idx']) - 1
-                    raw_status = str(raw_data[idx_in_raw][6]).strip()
+                    raw_status = str(raw_data[idx_in_raw][6]).strip() 
                     
                     if raw_status == '1':
                         dialog_confirm_inbound(int(selected_row['sheet_row_idx']))
                     else:
-                        st.error("상태가 임시(1)가 아닙니다")
+                        st.error("상태가 (임시)가 아닙니다")
 
         with c3:
             if st.button("수령", use_container_width=True):
@@ -443,7 +449,7 @@ else:
                     if raw_status == '4':
                         dialog_confirm_receipt(int(selected_row['sheet_row_idx']))
                     else:
-                        st.error("상태가 수령대기(4)가 아닙니다")
+                        st.error("상태가 (수령대기)가 아닙니다")
 
         with c4:
             if st.button("상태확인", use_container_width=True):
@@ -469,7 +475,6 @@ else:
     elif st.session_state['page'] == 'worker_dashboard':
         st.subheader("🛠️ 작업 시작/종료 상황판")
         
-        # 🚀 스프레드시트 직접 연결 대신 저장해둔 캐시 메모리에서 즉시 불러오기
         raw_data = get_cached_board_data()
         
         if len(raw_data) > 1:
@@ -545,7 +550,6 @@ else:
         selected_factory = st.selectbox("공장", factory_list, key="create_factory")
 
         try:
-            # 🚀 스프레드시트 직접 연결 대신 저장해둔 캐시 메모리에서 즉시 불러오기
             dept_data = get_cached_dept_data()
             valid_depts = [row[1] for row in dept_data if len(row) > 1 and row[0] == selected_factory]
         except Exception as e:
@@ -591,7 +595,7 @@ else:
                             ]
                             board_sheet.append_row(new_row)
                             
-                            get_cached_board_data.clear() # 🚀 등록 완료 후 캐시 지우기 (최신화)
+                            get_cached_board_data.clear() 
                             st.success("입고 생성 완료!")
                             
                             st.session_state['page'] = 'inbound_outbound'
