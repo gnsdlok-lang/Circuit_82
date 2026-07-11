@@ -138,10 +138,10 @@ def dialog_status_check(row_data, sheet_row_idx):
                     board_sheet.delete_rows(sheet_row_idx)
                     st.session_state.confirm_delete = False
                     st.success("삭제 완료")
-                    st.rerun() # 정상 처리 후에는 닫기 위해 rerun
+                    st.rerun() 
         else:
             st.button("삭제", use_container_width=True, disabled=True)
-            st.caption("※ 상태가 1일 때만 삭제 가능합니다.")
+            st.caption("※ 상태가 1(임시)일 때만 삭제 가능합니다.")
             
     with col2:
         if st.button("뒤로가기", use_container_width=True):
@@ -164,7 +164,6 @@ def dialog_worker_action(row_data, sheet_row_idx):
     if "worker_confirm" not in st.session_state:
         st.session_state.worker_confirm = None
 
-    # 다이얼로그 안에서 창이 안꺼지도록 하는 콜백 함수들
     def click_start():
         status = str(row_data[6]).strip()
         start_time = str(row_data[9]).strip() if len(row_data)>9 else ""
@@ -184,7 +183,6 @@ def dialog_worker_action(row_data, sheet_row_idx):
     def click_cancel():
         st.session_state.worker_confirm = None
 
-    # 화면 분기
     if st.session_state.worker_confirm == "start":
         st.warning("정말 작업을 시작하시겠습니까?")
         c1, c2 = st.columns(2)
@@ -193,8 +191,8 @@ def dialog_worker_action(row_data, sheet_row_idx):
                 client = get_google_client()
                 board_sheet = client.open("수령 목록82").worksheet("상황판")
                 current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-                board_sheet.update_cell(sheet_row_idx, 7, 3) # 상태 3 변경
-                board_sheet.update_cell(sheet_row_idx, 10, current_time_str) # 10열 작업시작
+                board_sheet.update_cell(sheet_row_idx, 7, 3) 
+                board_sheet.update_cell(sheet_row_idx, 10, current_time_str) 
                 board_sheet.update_cell(sheet_row_idx, 13, st.session_state.get('user_name', '알수없음')) 
                 st.session_state.worker_confirm = None
                 st.success("작업 시작 처리 완료!")
@@ -210,8 +208,8 @@ def dialog_worker_action(row_data, sheet_row_idx):
                 client = get_google_client()
                 board_sheet = client.open("수령 목록82").worksheet("상황판")
                 current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-                board_sheet.update_cell(sheet_row_idx, 7, 4) # 상태 4 변경
-                board_sheet.update_cell(sheet_row_idx, 11, current_time_str) # 11열 작업종료
+                board_sheet.update_cell(sheet_row_idx, 7, 4) 
+                board_sheet.update_cell(sheet_row_idx, 11, current_time_str) 
                 board_sheet.update_cell(sheet_row_idx, 14, st.session_state.get('user_name', '알수없음')) 
                 st.session_state.worker_confirm = None
                 st.success("작업 종료 처리 완료!")
@@ -224,7 +222,6 @@ def dialog_worker_action(row_data, sheet_row_idx):
         st.button("돌아가기", use_container_width=True, on_click=click_cancel)
 
     else:
-        # 최초 기본 버튼 화면
         col1, col2, col3 = st.columns(3)
         with col1:
             st.button("시작", use_container_width=True, type="primary", on_click=click_start)
@@ -364,8 +361,14 @@ else:
             df['sheet_row_idx'] = range(2, len(df) + 2)
             
             df_display = df.tail(10).copy()
-            display_cols = df_display.iloc[:, [2, 3, 5, 6]]
+            display_cols = df_display.iloc[:, [2, 3, 5, 6]].copy()
             display_cols.columns = ["부서", "품명", "일련번호", "상태"]
+            
+            # 💡 의뢰자용 상태 매핑 적용 (1~5 숫자를 텍스트로 변환)
+            status_map_inbound = {
+                '1': '임시', '2': '입고', '3': '작업중', '4': '수령대기', '5': '수령완료'
+            }
+            display_cols['상태'] = display_cols['상태'].astype(str).str.strip().map(status_map_inbound).fillna(display_cols['상태'])
             
             event = st.dataframe(
                 display_cols,
@@ -395,10 +398,13 @@ else:
                     st.warning("표에서 항목을 먼저 선택하세요.")
                 else:
                     selected_row = df_display.iloc[selected_indices[0]]
-                    if str(selected_row['상태']).strip() == '1':
+                    idx_in_raw = int(selected_row['sheet_row_idx']) - 1
+                    raw_status = str(raw_data[idx_in_raw][6]).strip() # 스프레드시트의 원본 상태값 읽기
+                    
+                    if raw_status == '1':
                         dialog_confirm_inbound(int(selected_row['sheet_row_idx']))
                     else:
-                        st.error("상태가 1이 아닙니다")
+                        st.error("상태가 임시(1)가 아닙니다")
 
         with c3:
             if st.button("수령", use_container_width=True):
@@ -406,10 +412,13 @@ else:
                     st.warning("표에서 항목을 먼저 선택하세요.")
                 else:
                     selected_row = df_display.iloc[selected_indices[0]]
-                    if str(selected_row['상태']).strip() == '4':
+                    idx_in_raw = int(selected_row['sheet_row_idx']) - 1
+                    raw_status = str(raw_data[idx_in_raw][6]).strip()
+                    
+                    if raw_status == '4':
                         dialog_confirm_receipt(int(selected_row['sheet_row_idx']))
                     else:
-                        st.error("상태가 4가 아닙니다")
+                        st.error("상태가 수령대기(4)가 아닙니다")
 
         with c4:
             if st.button("상태확인", use_container_width=True):
@@ -438,8 +447,14 @@ else:
             df['sheet_row_idx'] = range(2, len(df) + 2)
             
             df_display = df.tail(10).copy()
-            display_cols = df_display.iloc[:, [2, 3, 5, 6]]
+            display_cols = df_display.iloc[:, [2, 3, 5, 6]].copy()
             display_cols.columns = ["부서", "품명", "일련번호", "상태"]
+            
+            # 💡 작업자용 상태 매핑 적용 (1~5 숫자를 텍스트로 변환)
+            status_map_worker = {
+                '1': '임시', '2': '작업대기', '3': '작업중', '4': '작업완료', '5': '출고완료'
+            }
+            display_cols['상태'] = display_cols['상태'].astype(str).str.strip().map(status_map_worker).fillna(display_cols['상태'])
             
             event = st.dataframe(
                 display_cols,
@@ -466,7 +481,6 @@ else:
                     selected_row = df_display.iloc[selected_indices[0]]
                     idx_in_raw = int(selected_row['sheet_row_idx']) - 1
                     
-                    # 다이얼로그 열기 전에 이전 확인 상태 초기화
                     st.session_state.worker_confirm = None
                     dialog_worker_action(raw_data[idx_in_raw], int(selected_row['sheet_row_idx']))
         with c2:
@@ -477,7 +491,6 @@ else:
                     selected_row = df_display.iloc[selected_indices[0]]
                     idx_in_raw = int(selected_row['sheet_row_idx']) - 1
                     
-                    # 상태 확인 다이얼로그도 이전 삭제 상태 초기화
                     st.session_state.confirm_delete = False
                     dialog_status_check(raw_data[idx_in_raw], int(selected_row['sheet_row_idx']))
         with c3:
