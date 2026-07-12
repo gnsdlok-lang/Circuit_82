@@ -50,12 +50,12 @@ def get_worksheet(sheet_name):
     return client.open_by_key(SHEET_KEY).worksheet(sheet_name)
 
 # 3. 데이터 캐싱: max_entries를 추가하여 동시에 여러 메모리가 점유되는 것을 방지
-@st.cache_data(ttl=20, show_spinner=False, max_entries=1)
+@st.cache_data(ttl=80, show_spinner=False, max_entries=1)
 def get_cached_board_data():
     board_sheet = get_worksheet("상황판")
     return board_sheet.get_all_values()
 
-@st.cache_data(ttl=600, show_spinner=False, max_entries=1)
+@st.cache_data(ttl=1600, show_spinner=False, max_entries=1)
 def get_cached_dept_data():
     dept_sheet = get_worksheet("부서")
     return dept_sheet.get_all_values()
