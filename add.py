@@ -14,7 +14,7 @@ KST = timezone(timedelta(hours=9))
 # ==========================================
 # 0. 앱 기본 설정
 # ==========================================
-st.set_page_config(page_title="사내 수령 기록 시스템", page_icon="📦", layout="centered")
+st.set_page_config(page_title="순회작업 기록 시스템", page_icon="📦", layout="centered")
 
 hide_streamlit_style = """
 <style>
@@ -392,7 +392,7 @@ if 'page' not in st.session_state:
 # 화면 1: 로그인 화면
 # ==========================================
 if not st.session_state['logged_in']:
-    st.markdown("<h3 style='text-align: center; color: #4A5568;'>🏢 사내 시스템</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: #4A5568;'>🏢 순회작업 기록시스템</h3>", unsafe_allow_html=True)
     st.write("---")
     
     user_id = st.text_input("아이디", placeholder="아이디를 입력하세요")
