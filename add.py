@@ -285,42 +285,48 @@ def dialog_status_check(row_data, sheet_row_idx):
     
     st.write("---")
     
-    if "confirm_delete" not in st.session_state:
-        st.session_state.confirm_delete = False
-    def set_delete():
-        st.session_state.confirm_delete = True
-
-    col1, col2 = st.columns(2)
-    with col1:
-        if len(row_data)>6 and str(row_data[6]).strip() == '1':
-            if not st.session_state.confirm_delete:
-                st.button("삭제", use_container_width=True, type="primary", on_click=set_delete)
-            else:
-                st.warning("정말 삭제할까요?")
-                if st.button("최종 삭제", use_container_width=True):
-                    board_sheet = get_worksheet("상황판")
-                    row_idx = get_exact_row_idx(board_sheet, row_data, sheet_row_idx)
-                    
-                    if str(board_sheet.cell(row_idx, 7).value).strip() == '1':
-                        board_sheet.delete_rows(row_idx)
-                        get_cached_board_data.clear() 
-                        st.session_state.confirm_delete = False
-                        st.success("삭제 완료")
-                        time.sleep(1)
-                        st.rerun() 
-                    else:
-                        st.error("⚠️ 이미 상태가 변경되어 삭제 불가")
-                        time.sleep(1.5)
-                        st.session_state.confirm_delete = False
-                        st.rerun()
-        else:
-            st.button("삭제", use_container_width=True, disabled=True)
-            st.caption("※ 상태가 (임시)일 때만 삭제 가능합니다.")
-            
-    with col2:
-        if st.button("뒤로가기", use_container_width=True):
-            st.session_state.confirm_delete = False
+    # VIP(권한 2)인 경우 닫기 버튼만 제공
+    if st.session_state.get('user_level') == "2":
+        if st.button("닫기", use_container_width=True):
             st.rerun()
+    else:
+        # 그 외 사용자는 삭제/뒤로가기 제공
+        if "confirm_delete" not in st.session_state:
+            st.session_state.confirm_delete = False
+        def set_delete():
+            st.session_state.confirm_delete = True
+
+        col1, col2 = st.columns(2)
+        with col1:
+            if len(row_data)>6 and str(row_data[6]).strip() == '1':
+                if not st.session_state.confirm_delete:
+                    st.button("삭제", use_container_width=True, type="primary", on_click=set_delete)
+                else:
+                    st.warning("정말 삭제할까요?")
+                    if st.button("최종 삭제", use_container_width=True):
+                        board_sheet = get_worksheet("상황판")
+                        row_idx = get_exact_row_idx(board_sheet, row_data, sheet_row_idx)
+                        
+                        if str(board_sheet.cell(row_idx, 7).value).strip() == '1':
+                            board_sheet.delete_rows(row_idx)
+                            get_cached_board_data.clear() 
+                            st.session_state.confirm_delete = False
+                            st.success("삭제 완료")
+                            time.sleep(1)
+                            st.rerun() 
+                        else:
+                            st.error("⚠️ 이미 상태가 변경되어 삭제 불가")
+                            time.sleep(1.5)
+                            st.session_state.confirm_delete = False
+                            st.rerun()
+            else:
+                st.button("삭제", use_container_width=True, disabled=True)
+                st.caption("※ 상태가 (임시)일 때만 삭제 가능합니다.")
+                
+        with col2:
+            if st.button("뒤로가기", use_container_width=True):
+                st.session_state.confirm_delete = False
+                st.rerun()
 
 @st.dialog("작업 시작/종료 처리")
 def dialog_worker_action(row_data, sheet_row_idx):
@@ -518,7 +524,7 @@ else:
         st.markdown("#### 📌 원하시는 업무를 선택해주세요")
         st.write("") 
         
-        if st.session_state['user_level'] == "3":
+        if st.session_state['user_level'] == "3": # 관리자
             col1, col2, col3 = st.columns(3)
             with col1:
                 if st.button("📦 입고/수령\n(의뢰자용)", use_container_width=True):
@@ -532,7 +538,19 @@ else:
                 if st.button("⚙️ 관리자 화면\n(관리자용)", use_container_width=True):
                     st.session_state['page'] = 'admin_dashboard'
                     st.rerun()
-        else:
+                    
+        elif st.session_state['user_level'] == "2": # VIP
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("📊 진행 상황판", use_container_width=True):
+                    st.session_state['page'] = 'vip_dashboard'
+                    st.rerun()
+            with col2:
+                if st.button("✅ 완료 확인", use_container_width=True):
+                    st.session_state['page'] = 'vip_completed'
+                    st.rerun()
+                    
+        else: # 일반 사용자
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("📦 입고/수령\n(의뢰자용)", use_container_width=True):
@@ -572,31 +590,28 @@ else:
                     
                     for i, row in enumerate(board_data):
                         if i == 0: continue
-                        if len(row) > 6 and str(row[6]).strip() == '5': # 7열 상태 == 5 (완료수령)
-                            inbound_dt = row[7] if len(row) > 7 else "" # 8열 (입고일자)
-                            start_dt = row[9] if len(row) > 9 else ""   # 10열 (작업시작)
-                            end_dt = row[10] if len(row) > 10 else ""   # 11열 (작업종료)
-                            receipt_dt = row[11] if len(row) > 11 else "" # 12열 (수령일자)
+                        if len(row) > 6 and str(row[6]).strip() == '5': 
+                            inbound_dt = row[7] if len(row) > 7 else "" 
+                            start_dt = row[9] if len(row) > 9 else ""   
+                            end_dt = row[10] if len(row) > 10 else ""   
+                            receipt_dt = row[11] if len(row) > 11 else "" 
                             
-                            # 워크데이 기준 시간 계산
                             start_delay = calc_workday_hours(inbound_dt, start_dt)
                             receipt_delay = calc_workday_hours(end_dt, receipt_dt)
                             waste_time = start_delay + receipt_delay
                             
-                            # 배열 길이를 18까지 맞춤
                             while len(row) < 18:
                                 row.append("")
                                 
-                            row[15] = format_hours(start_delay)   # 16열
-                            row[16] = format_hours(receipt_delay) # 17열
-                            row[17] = format_hours(waste_time)    # 18열
+                            row[15] = format_hours(start_delay)   
+                            row[16] = format_hours(receipt_delay) 
+                            row[17] = format_hours(waste_time)    
                             
                             rows_to_append.append(row)
-                            rows_to_delete.append(i + 1) # 스프레드시트는 1-based index
+                            rows_to_delete.append(i + 1) 
                     
                     if rows_to_append:
                         completed_sheet.append_rows(rows_to_append)
-                        # 아래 행부터 지워야 인덱스가 꼬이지 않음
                         for idx in sorted(rows_to_delete, reverse=True):
                             board_sheet.delete_rows(idx)
                         get_cached_board_data.clear()
@@ -620,7 +635,7 @@ else:
             st.session_state['page'] = 'main'
             st.rerun()
 
-    # ------------------ 완료 작업 확인 (완료기록 뷰어) ------------------
+    # ------------------ 완료 작업 확인 (관리자 뷰어) ------------------
     elif st.session_state['page'] == 'admin_completed_tasks':
         st.subheader("✅ 완료 작업 기록")
         st.caption("※ 상황판에서 '완료' 처리된 작업들이 이곳으로 이동되며 지연 시간이 계산됩니다.")
@@ -632,7 +647,6 @@ else:
             df.columns = [str(i) for i in range(len(df.columns))]
             df['sheet_row_idx'] = df.index + 2
             
-            # 사용자 요구 7개 열 매핑: 2열, 3열, 4열, 8열, 16열, 17열, 18열
             display_df = pd.DataFrame()
             display_df["공장"] = df['1'] if '1' in df.columns else ""
             display_df["부서"] = df['2'] if '2' in df.columns else ""
@@ -683,7 +697,6 @@ else:
             account_sheet = get_worksheet("계정관리")
             acc_data = account_sheet.get_all_values()
             
-            # 검색 조건 매칭 (index 1: 아이디, index 3: 이름)
             matches = []
             for idx, row in enumerate(acc_data):
                 if idx == 0: continue
@@ -701,7 +714,6 @@ else:
                 
                 if st.button("선택 계정 초기화", type="primary"):
                     with st.spinner("초기화 진행 중..."):
-                        # 초기화 비밀번호 = 아이디 (SHA-256)
                         new_hashed_pw = make_hash(selected_user['id'])
                         account_sheet.update_cell(selected_user['sheet_idx'], 3, new_hashed_pw)
                         st.success(f"{selected_user['name']}님의 비밀번호가 아이디와 동일하게 초기화되었습니다.")
@@ -714,6 +726,149 @@ else:
         if st.button("뒤로가기"):
             st.session_state['page'] = 'admin_dashboard'
             st.rerun()
+
+    # ------------------ VIP 전용 : 진행 상황판 ------------------
+    elif st.session_state['page'] == 'vip_dashboard':
+        st.subheader("📊 진행 상황판")
+        
+        raw_data = get_cached_board_data()
+        
+        if len(raw_data) > 1:
+            df = pd.DataFrame(raw_data[1:])
+            df.columns = [str(i) for i in range(len(df.columns))]
+            df['sheet_row_idx'] = df.index + 2  
+            
+            col_f1, col_f2 = st.columns([2.5, 1])
+            with col_f1:
+                search_query = st.text_input("🔍 품명, 부서, 일련번호 검색", "", key="search_vip_dash")
+            with col_f2:
+                st.write("") 
+                st.write("")
+                show_completed = st.checkbox("✅ 완료 포함", value=False, key="check_vip_dash")
+                
+            if '6' in df.columns:
+                if not show_completed:
+                    df = df[df['6'].astype(str).str.strip() != '5']
+            
+            if search_query:
+                mask = False
+                if '2' in df.columns: mask |= df['2'].astype(str).str.contains(search_query, case=False)
+                if '3' in df.columns: mask |= df['3'].astype(str).str.contains(search_query, case=False)
+                if '5' in df.columns: mask |= df['5'].astype(str).str.contains(search_query, case=False)
+                df = df[mask]
+                
+            df = df.iloc[::-1]
+
+            display_df = pd.DataFrame()
+            display_df["부서"] = df['2'] if '2' in df.columns else ""
+            display_df["품명"] = df['3'] if '3' in df.columns else ""
+            display_df["일련번호"] = df['5'] if '5' in df.columns else ""
+            
+            status_map_inbound = {'1': '⚪ 임시', '2': '🟡 입고', '3': '▶️ 작업중', '4': '🟢 수령대기', '5': '✅ 수령완료'}
+            if '6' in df.columns:
+                display_df["상태"] = df['6'].astype(str).str.strip().map(status_map_inbound).fillna(df['6'])
+
+            st.caption("※ 표에서 확인하고자 하는 항목을 선택하세요.")
+            
+            event = st.dataframe(
+                display_df,
+                use_container_width=True,
+                hide_index=True,
+                selection_mode="single-row",
+                on_select="rerun"
+            )
+            selected_indices = event.selection.rows
+        else:
+            st.info("현재 등록된 데이터가 없습니다.")
+            selected_indices = []
+            df = pd.DataFrame()
+            
+        st.write("---")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("상태확인", use_container_width=True, type="primary"):
+                if len(selected_indices) == 0:
+                    st.warning("표에서 항목을 먼저 선택하세요.")
+                else:
+                    actual_row = df.iloc[selected_indices[0]]
+                    sheet_row_idx = int(actual_row['sheet_row_idx'])
+                    
+                    row_data = raw_data[sheet_row_idx - 1]
+                    dialog_status_check(row_data, sheet_row_idx)
+
+        with c2:
+            pass # 여백
+            
+        st.write("")
+        col_btn1, col_btn2 = st.columns([1, 4])
+        with col_btn1:
+            if st.button("🔄 새로고침", use_container_width=True):
+                get_cached_board_data.clear()
+                st.rerun()
+        with col_btn2:
+            if st.button("⬅️ 메인으로 돌아가기", use_container_width=True):
+                st.session_state['page'] = 'main'
+                st.rerun()
+
+    # ------------------ VIP 전용 : 완료 확인 ------------------
+    elif st.session_state['page'] == 'vip_completed':
+        st.subheader("✅ 완료 확인")
+        
+        raw_completed = get_cached_completed_data()
+        
+        if len(raw_completed) > 1:
+            df = pd.DataFrame(raw_completed[1:])
+            df.columns = [str(i) for i in range(len(df.columns))]
+            df['sheet_row_idx'] = df.index + 2
+            
+            display_df = pd.DataFrame()
+            display_df["공장"] = df['1'] if '1' in df.columns else ""
+            display_df["부서"] = df['2'] if '2' in df.columns else ""
+            display_df["품명"] = df['3'] if '3' in df.columns else ""
+            display_df["입고일자"] = df['7'] if '7' in df.columns else ""
+            display_df["시작지연"] = df['15'] if '15' in df.columns else ""
+            display_df["수령지연"] = df['16'] if '16' in df.columns else ""
+            display_df["낭비시간"] = df['17'] if '17' in df.columns else ""
+            
+            event = st.dataframe(
+                display_df,
+                use_container_width=True,
+                hide_index=True,
+                selection_mode="single-row",
+                on_select="rerun"
+            )
+            selected_indices = event.selection.rows
+        else:
+            st.info("현재 기록된 완료 데이터가 없습니다.")
+            selected_indices = []
+            df = pd.DataFrame()
+            
+        st.write("---")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("상세확인", use_container_width=True, type="primary"):
+                if len(selected_indices) == 0:
+                    st.warning("표에서 항목을 먼저 선택하세요.")
+                else:
+                    actual_row = df.iloc[selected_indices[0]]
+                    sheet_row_idx = int(actual_row['sheet_row_idx'])
+                    row_data = raw_completed[sheet_row_idx - 1]
+                    dialog_completed_detail(row_data)
+        with c2:
+            pass # 여백
+            
+        st.write("")
+        col_btn1, col_btn2 = st.columns([1, 4])
+        with col_btn1:
+            if st.button("🔄 새로고침", use_container_width=True):
+                get_cached_completed_data.clear()
+                st.rerun()
+        with col_btn2:
+            if st.button("⬅️ 메인으로 돌아가기", use_container_width=True):
+                st.session_state['page'] = 'main'
+                st.rerun()
 
     # ------------------ 입고/수령 상황판 (의뢰자용) ------------------
     elif st.session_state['page'] == 'inbound_outbound':
