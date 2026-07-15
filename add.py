@@ -28,7 +28,6 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # 1. 구글 스프레드시트 연결 및 캐싱 함수
 # ==========================================
 
-# 1. API 연결: max_entries를 1로 제한하여 메모리 누수 방지
 @st.cache_resource(show_spinner=False, max_entries=1)
 def get_google_client():
     key_dict = json.loads(st.secrets["gcp_service_account"])
@@ -41,15 +40,12 @@ def get_google_client():
     )
     return gspread.authorize(creds)
 
-# 2. 시트 열기: ID 기반으로 변경 (제공해주신 URL의 ID 적용)
 @st.cache_resource(show_spinner=False, ttl=3600, max_entries=5)
 def get_worksheet(sheet_name):
     client = get_google_client()
-    # 제공해주신 시트 ID 적용 완료
     SHEET_KEY = "1yFIOdJBe4-cBQdGPPA8lRccaPuOqx0qR_YnA-4EHt8I"
     return client.open_by_key(SHEET_KEY).worksheet(sheet_name)
 
-# 3. 데이터 캐싱: max_entries를 추가하여 동시에 여러 메모리가 점유되는 것을 방지
 @st.cache_data(ttl=80, show_spinner=False, max_entries=1)
 def get_cached_board_data():
     board_sheet = get_worksheet("상황판")
@@ -59,6 +55,11 @@ def get_cached_board_data():
 def get_cached_dept_data():
     dept_sheet = get_worksheet("부서")
     return dept_sheet.get_all_values()
+
+@st.cache_data(ttl=80, show_spinner=False, max_entries=1)
+def get_cached_completed_data():
+    completed_sheet = get_worksheet("완료기록")
+    return completed_sheet.get_all_values()
 
 def make_hash(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -73,10 +74,78 @@ def get_exact_row_idx(sheet, row_data, fallback_idx):
         except Exception:
             pass
     return fallback_idx
+
+# 워크데이 시간 계산 함수 (주말 제외)
+def calc_workday_hours(start_str, end_str):
+    if not start_str or not end_str: return 0.0
+    try:
+        t1 = datetime.strptime(start_str.strip(), "%Y-%m-%d %H:%M:%S")
+        t2 = datetime.strptime(end_str.strip(), "%Y-%m-%d %H:%M:%S")
+        if t1 > t2: return 0.0
+        
+        work_seconds = 0
+        curr_time = t1
+        # 1시간 단위로 스텝을 밟으며 주말(5: 토요일, 6: 일요일)을 제외하고 시간 누적
+        while curr_time < t2:
+            next_time = min(curr_time + timedelta(hours=1), t2)
+            if curr_time.weekday() < 5:
+                work_seconds += (next_time - curr_time).total_seconds()
+            curr_time = next_time
+            
+        return work_seconds / 3600.0
+    except:
+        return 0.0
+
+def format_hours(hours_float):
+    if hours_float == 0.0: return "0시간"
+    d = int(hours_float // 24)
+    h = int(hours_float % 24)
+    return f"{d}일 {h}시간" if d > 0 else f"{h}시간"
     
 # ==========================================
 # 2. Dialog 함수들
 # ==========================================
+@st.dialog("시스템 점검 설정")
+def dialog_system_maintenance():
+    account_sheet = get_worksheet("계정관리")
+    # 계정관리 시트의 E1(1행 5열) 셀을 점검 상태 기록용으로 사용
+    current_status = account_sheet.cell(1, 5).value 
+    is_maintenance = (str(current_status).strip() == "MAINTENANCE")
+    
+    st.write(f"현재 상태: **{'🚨 점검 중' if is_maintenance else '🟢 정상 작동 중'}**")
+    st.caption("시스템 점검을 시작하면 일반/VIP 권한 사용자의 로그인이 차단됩니다.")
+    st.write("---")
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("점검 시작", use_container_width=True, disabled=is_maintenance, type="primary"):
+            account_sheet.update_cell(1, 5, "MAINTENANCE")
+            st.success("점검 모드가 켜졌습니다.")
+            time.sleep(1)
+            st.rerun()
+    with c2:
+        if st.button("점검 종료", use_container_width=True, disabled=not is_maintenance):
+            account_sheet.update_cell(1, 5, "NORMAL")
+            st.success("시스템이 정상화되었습니다.")
+            time.sleep(1)
+            st.rerun()
+
+@st.dialog("완료기록 상세")
+def dialog_completed_detail(row_data):
+    st.markdown(f"**1. 공장/부서 :** {row_data[1] if len(row_data)>1 else '-'} / {row_data[2] if len(row_data)>2 else '-'}")
+    st.markdown(f"**2. 품명/일련번호 :** {row_data[3] if len(row_data)>3 else '-'} / {row_data[5] if len(row_data)>5 else '-'}")
+    st.markdown(f"**3. 요구일자 :** {row_data[8] if len(row_data)>8 else '-'}")
+    st.markdown(f"**4. 입고일자 :** {row_data[7] if len(row_data)>7 else '-'} (의뢰자: {row_data[4] if len(row_data)>4 else '-'})")
+    st.markdown(f"**5. 작업시작 :** {row_data[9] if len(row_data)>9 else '-'} (담당: {row_data[12] if len(row_data)>12 else '-'})")
+    st.markdown(f"**6. 작업종료 :** {row_data[10] if len(row_data)>10 else '-'} (담당: {row_data[13] if len(row_data)>13 else '-'})")
+    st.markdown(f"**7. 수령일자 :** {row_data[11] if len(row_data)>11 else '-'} (담당: {row_data[14] if len(row_data)>14 else '-'})")
+    st.markdown(f"**8. 시작지연 :** {row_data[15] if len(row_data)>15 else '-'}")
+    st.markdown(f"**9. 수령지연 :** {row_data[16] if len(row_data)>16 else '-'}")
+    st.markdown(f"**10. 낭비시간 :** {row_data[17] if len(row_data)>17 else '-'}")
+    
+    if st.button("닫기", use_container_width=True):
+        st.rerun()
+
 @st.dialog("비밀번호 최종 확인")
 def confirm_password_change(new_pw):
     st.write("정말 비밀번호를 변경하시겠습니까?")
@@ -94,8 +163,7 @@ def confirm_password_change(new_pw):
                         hashed_pw = make_hash(new_pw)
                         account_sheet.update_cell(cell.row, 3, hashed_pw)
                         st.success("변경 완료! 다시 로그인해주세요.")
-                        time.sleep(1.5) # 메시지 증발 방지
-                        
+                        time.sleep(1.5)
                         for key in list(st.session_state.keys()):
                             del st.session_state[key]
                         st.session_state['logged_in'] = False
@@ -116,21 +184,18 @@ def dialog_confirm_inbound(row_data, sheet_row_idx):
         if st.button("확인", use_container_width=True, type="primary"):
             board_sheet = get_worksheet("상황판")
             row_idx = get_exact_row_idx(board_sheet, row_data, sheet_row_idx)
-            
-            # 동시성 재검증: 현재 상태가 '1(임시)'인지 확인
             current_status = board_sheet.cell(row_idx, 7).value
             if str(current_status).strip() == '1':
                 board_sheet.update_cell(row_idx, 7, 2)
                 get_cached_board_data.clear() 
                 st.success("입고 처리 완료!")
-                time.sleep(1) # 메시지 증발 방지
+                time.sleep(1)
                 st.rerun()
             else:
-                st.error("⚠️ 이미 상태가 변경되었습니다. 새로고침됩니다.")
+                st.error("⚠️ 이미 상태가 변경되었습니다.")
                 time.sleep(1.5)
                 get_cached_board_data.clear()
                 st.rerun()
-                
     with col2:
         if st.button("취소", use_container_width=True):
             st.rerun()
@@ -143,8 +208,6 @@ def dialog_confirm_receipt(row_data, sheet_row_idx):
         if st.button("확인", use_container_width=True, type="primary"):
             board_sheet = get_worksheet("상황판")
             row_idx = get_exact_row_idx(board_sheet, row_data, sheet_row_idx)
-            
-            # 동시성 재검증: 현재 상태가 '4(수령대기)'인지 확인
             current_status = board_sheet.cell(row_idx, 7).value
             if str(current_status).strip() == '4':
                 current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
@@ -159,11 +222,10 @@ def dialog_confirm_receipt(row_data, sheet_row_idx):
                 time.sleep(1)
                 st.rerun()
             else:
-                st.error("⚠️ 이미 상태가 변경되었습니다. 새로고침됩니다.")
+                st.error("⚠️ 이미 상태가 변경되었습니다.")
                 time.sleep(1.5)
                 get_cached_board_data.clear()
                 st.rerun()
-                
     with col2:
         if st.button("취소", use_container_width=True):
             st.rerun()
@@ -196,10 +258,8 @@ def dialog_status_check(row_data, sheet_row_idx):
     
     def trim_seconds(time_str):
         t = time_str.strip()
-        if not t:
-            return "-"
-        if t.count(":") == 2:
-            return t.rsplit(":", 1)[0]
+        if not t: return "-"
+        if t.count(":") == 2: return t.rsplit(":", 1)[0]
         return t
 
     req_raw = row_data[8].strip() if len(row_data) > 8 and row_data[8].strip() else ""
@@ -227,7 +287,6 @@ def dialog_status_check(row_data, sheet_row_idx):
     
     if "confirm_delete" not in st.session_state:
         st.session_state.confirm_delete = False
-
     def set_delete():
         st.session_state.confirm_delete = True
 
@@ -242,7 +301,6 @@ def dialog_status_check(row_data, sheet_row_idx):
                     board_sheet = get_worksheet("상황판")
                     row_idx = get_exact_row_idx(board_sheet, row_data, sheet_row_idx)
                     
-                    # 동시성 검증
                     if str(board_sheet.cell(row_idx, 7).value).strip() == '1':
                         board_sheet.delete_rows(row_idx)
                         get_cached_board_data.clear() 
@@ -251,7 +309,7 @@ def dialog_status_check(row_data, sheet_row_idx):
                         time.sleep(1)
                         st.rerun() 
                     else:
-                        st.error("⚠️ 이미 상태가 변경되어 삭제할 수 없습니다.")
+                        st.error("⚠️ 이미 상태가 변경되어 삭제 불가")
                         time.sleep(1.5)
                         st.session_state.confirm_delete = False
                         st.rerun()
@@ -274,7 +332,6 @@ def dialog_worker_action(row_data, sheet_row_idx):
     st.markdown(f"**요구일자:** {row_data[8] if len(row_data)>8 else '-'}")
     st.markdown(f"**작업시작:** {row_data[9] if len(row_data)>9 else '-'}")
     st.markdown(f"**작업종료:** {row_data[10] if len(row_data)>10 else '-'}")
-    
     st.write("---")
     
     if "worker_confirm" not in st.session_state:
@@ -283,18 +340,14 @@ def dialog_worker_action(row_data, sheet_row_idx):
     def click_start():
         status = str(row_data[6]).strip() if len(row_data)>6 else ""
         start_time = str(row_data[9]).strip() if len(row_data)>9 else ""
-        if status == '2' and start_time == "":
-            st.session_state.worker_confirm = "start"
-        else:
-            st.session_state.worker_confirm = "error"
+        if status == '2' and start_time == "": st.session_state.worker_confirm = "start"
+        else: st.session_state.worker_confirm = "error"
 
     def click_end():
         status = str(row_data[6]).strip() if len(row_data)>6 else ""
         end_time = str(row_data[10]).strip() if len(row_data)>10 else ""
-        if status == '3' and end_time == "":
-            st.session_state.worker_confirm = "end"
-        else:
-            st.session_state.worker_confirm = "error"
+        if status == '3' and end_time == "": st.session_state.worker_confirm = "end"
+        else: st.session_state.worker_confirm = "error"
 
     def click_cancel():
         st.session_state.worker_confirm = None
@@ -306,8 +359,6 @@ def dialog_worker_action(row_data, sheet_row_idx):
             if st.button("최종 시작", use_container_width=True, type="primary"):
                 board_sheet = get_worksheet("상황판")
                 row_idx = get_exact_row_idx(board_sheet, row_data, sheet_row_idx)
-                
-                # 동시성 검증: '2(작업대기)' 상태인지 확인
                 if str(board_sheet.cell(row_idx, 7).value).strip() == '2':
                     current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
                     cells = [
@@ -316,14 +367,13 @@ def dialog_worker_action(row_data, sheet_row_idx):
                         Cell(row=row_idx, col=13, value=st.session_state.get('user_name', '알수없음'))
                     ]
                     board_sheet.update_cells(cells) 
-                    
                     get_cached_board_data.clear() 
                     st.session_state.worker_confirm = None
                     st.success("작업 시작 처리 완료!")
                     time.sleep(1)
                     st.rerun()
                 else:
-                    st.error("⚠️ 이미 다른 작업자가 상태를 변경했습니다.")
+                    st.error("⚠️ 이미 상태가 변경되었습니다.")
                     time.sleep(1.5)
                     st.session_state.worker_confirm = None
                     st.rerun()
@@ -337,8 +387,6 @@ def dialog_worker_action(row_data, sheet_row_idx):
             if st.button("최종 종료", use_container_width=True, type="primary"):
                 board_sheet = get_worksheet("상황판")
                 row_idx = get_exact_row_idx(board_sheet, row_data, sheet_row_idx)
-                
-                # 동시성 검증: '3(작업중)' 상태인지 확인
                 if str(board_sheet.cell(row_idx, 7).value).strip() == '3':
                     current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
                     cells = [
@@ -347,14 +395,13 @@ def dialog_worker_action(row_data, sheet_row_idx):
                         Cell(row=row_idx, col=14, value=st.session_state.get('user_name', '알수없음'))
                     ]
                     board_sheet.update_cells(cells)
-                    
                     get_cached_board_data.clear() 
                     st.session_state.worker_confirm = None
                     st.success("작업 종료 처리 완료!")
                     time.sleep(1)
                     st.rerun() 
                 else:
-                    st.error("⚠️ 이미 다른 작업자가 상태를 변경했습니다.")
+                    st.error("⚠️ 이미 상태가 변경되었습니다.")
                     time.sleep(1.5)
                     st.session_state.worker_confirm = None
                     st.rerun()
@@ -413,15 +460,24 @@ if not st.session_state['logged_in']:
                         account_sheet = get_worksheet("계정관리")
                         data = account_sheet.get_all_values()
                         
+                        system_status = str(data[0][4]).strip() if len(data[0]) > 4 else ""
                         login_success = False
+                        
                         for row in data[1:]:
                             if len(row) >= 4:
                                 hashed_input_pw = make_hash(user_pw)
                                 if str(row[1]) == str(user_id) and str(row[2]) == str(hashed_input_pw):
+                                    user_level = str(row[4])
+                                    
+                                    # 시스템 점검 중일 경우 차단 (관리자 레벨 3 제외)
+                                    if system_status == "MAINTENANCE" and user_level in ["1", "2"]:
+                                        st.error("🚨 시스템이 현재 점검 중입니다. 잠시 후 다시 시도해주세요.")
+                                        st.stop()
+                                        
                                     st.session_state['logged_in'] = True
                                     st.session_state['user_id'] = str(row[1])
                                     st.session_state['user_name'] = str(row[3])
-                                    st.session_state['user_level'] = str(row[4])
+                                    st.session_state['user_level'] = user_level
                                     st.session_state['page'] = 'main'
                                     login_success = True
                                     break
@@ -473,7 +529,9 @@ else:
                     st.session_state['page'] = 'worker_dashboard'
                     st.rerun()
             with col3:
-                st.button("⚙️ 관리자 화면\n(준비중)", use_container_width=True)
+                if st.button("⚙️ 관리자 화면\n(관리자용)", use_container_width=True):
+                    st.session_state['page'] = 'admin_dashboard'
+                    st.rerun()
         else:
             col1, col2 = st.columns(2)
             with col1:
@@ -495,6 +553,167 @@ else:
                 st.rerun()
         with c2:
             st.button("🚪 로그아웃", on_click=lambda: st.session_state.clear(), use_container_width=True)
+
+    # ------------------ 관리자 전용 대시보드 ------------------
+    elif st.session_state['page'] == 'admin_dashboard':
+        st.subheader("⚙️ 관리자 화면")
+        st.write("---")
+        
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            if st.button("완료 작업 확인", use_container_width=True):
+                with st.spinner("데이터를 계산하고 이동 중입니다..."):
+                    board_sheet = get_worksheet("상황판")
+                    completed_sheet = get_worksheet("완료기록")
+                    board_data = board_sheet.get_all_values()
+                    
+                    rows_to_delete = []
+                    rows_to_append = []
+                    
+                    for i, row in enumerate(board_data):
+                        if i == 0: continue
+                        if len(row) > 6 and str(row[6]).strip() == '5': # 7열 상태 == 5 (완료수령)
+                            inbound_dt = row[7] if len(row) > 7 else "" # 8열 (입고일자)
+                            start_dt = row[9] if len(row) > 9 else ""   # 10열 (작업시작)
+                            end_dt = row[10] if len(row) > 10 else ""   # 11열 (작업종료)
+                            receipt_dt = row[11] if len(row) > 11 else "" # 12열 (수령일자)
+                            
+                            # 워크데이 기준 시간 계산
+                            start_delay = calc_workday_hours(inbound_dt, start_dt)
+                            receipt_delay = calc_workday_hours(end_dt, receipt_dt)
+                            waste_time = start_delay + receipt_delay
+                            
+                            # 배열 길이를 18까지 맞춤
+                            while len(row) < 18:
+                                row.append("")
+                                
+                            row[15] = format_hours(start_delay)   # 16열
+                            row[16] = format_hours(receipt_delay) # 17열
+                            row[17] = format_hours(waste_time)    # 18열
+                            
+                            rows_to_append.append(row)
+                            rows_to_delete.append(i + 1) # 스프레드시트는 1-based index
+                    
+                    if rows_to_append:
+                        completed_sheet.append_rows(rows_to_append)
+                        # 아래 행부터 지워야 인덱스가 꼬이지 않음
+                        for idx in sorted(rows_to_delete, reverse=True):
+                            board_sheet.delete_rows(idx)
+                        get_cached_board_data.clear()
+                        get_cached_completed_data.clear()
+                        
+                st.session_state['page'] = 'admin_completed_tasks'
+                st.rerun()
+
+        with c2:
+            if st.button("비밀번호 초기화", use_container_width=True):
+                st.session_state['page'] = 'admin_pw_reset'
+                st.rerun()
+                
+        with c3:
+            if st.button("시스템 점검", use_container_width=True):
+                dialog_system_maintenance()
+
+        st.write("")
+        st.write("---")
+        if st.button("⬅️ 메인으로 돌아가기", use_container_width=True):
+            st.session_state['page'] = 'main'
+            st.rerun()
+
+    # ------------------ 완료 작업 확인 (완료기록 뷰어) ------------------
+    elif st.session_state['page'] == 'admin_completed_tasks':
+        st.subheader("✅ 완료 작업 기록")
+        st.caption("※ 상황판에서 '완료' 처리된 작업들이 이곳으로 이동되며 지연 시간이 계산됩니다.")
+        
+        raw_completed = get_cached_completed_data()
+        
+        if len(raw_completed) > 1:
+            df = pd.DataFrame(raw_completed[1:])
+            df.columns = [str(i) for i in range(len(df.columns))]
+            df['sheet_row_idx'] = df.index + 2
+            
+            # 사용자 요구 7개 열 매핑: 2열, 3열, 4열, 8열, 16열, 17열, 18열
+            display_df = pd.DataFrame()
+            display_df["공장"] = df['1'] if '1' in df.columns else ""
+            display_df["부서"] = df['2'] if '2' in df.columns else ""
+            display_df["품명"] = df['3'] if '3' in df.columns else ""
+            display_df["입고일자"] = df['7'] if '7' in df.columns else ""
+            display_df["시작지연"] = df['15'] if '15' in df.columns else ""
+            display_df["수령지연"] = df['16'] if '16' in df.columns else ""
+            display_df["낭비시간"] = df['17'] if '17' in df.columns else ""
+            
+            event = st.dataframe(
+                display_df,
+                use_container_width=True,
+                hide_index=True,
+                selection_mode="single-row",
+                on_select="rerun"
+            )
+            selected_indices = event.selection.rows
+        else:
+            st.info("현재 기록된 완료 데이터가 없습니다.")
+            selected_indices = []
+            df = pd.DataFrame()
+            
+        st.write("---")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("상세보기", use_container_width=True, type="primary"):
+                if len(selected_indices) == 0:
+                    st.warning("표에서 항목을 먼저 선택하세요.")
+                else:
+                    actual_row = df.iloc[selected_indices[0]]
+                    sheet_row_idx = int(actual_row['sheet_row_idx'])
+                    row_data = raw_completed[sheet_row_idx - 1]
+                    dialog_completed_detail(row_data)
+        with c2:
+            if st.button("뒤로가기", use_container_width=True):
+                st.session_state['page'] = 'admin_dashboard'
+                st.rerun()
+
+    # ------------------ 비밀번호 초기화 페이지 ------------------
+    elif st.session_state['page'] == 'admin_pw_reset':
+        st.subheader("🔑 사용자 비밀번호 초기화")
+        st.write("---")
+        
+        search_kw = st.text_input("검색 (아이디 또는 이름)", placeholder="최소 2글자 이상 입력하세요")
+        
+        if len(search_kw) >= 2:
+            account_sheet = get_worksheet("계정관리")
+            acc_data = account_sheet.get_all_values()
+            
+            # 검색 조건 매칭 (index 1: 아이디, index 3: 이름)
+            matches = []
+            for idx, row in enumerate(acc_data):
+                if idx == 0: continue
+                if len(row) > 3:
+                    if search_kw in row[1] or search_kw in row[3]:
+                        matches.append({"sheet_idx": idx + 1, "id": row[1], "name": row[3]})
+            
+            if matches:
+                st.success(f"{len(matches)}명의 사용자가 검색되었습니다.")
+                selected_user = st.radio(
+                    "초기화할 사용자 선택",
+                    options=matches,
+                    format_func=lambda x: f"{x['name']} (ID: {x['id']})"
+                )
+                
+                if st.button("선택 계정 초기화", type="primary"):
+                    with st.spinner("초기화 진행 중..."):
+                        # 초기화 비밀번호 = 아이디 (SHA-256)
+                        new_hashed_pw = make_hash(selected_user['id'])
+                        account_sheet.update_cell(selected_user['sheet_idx'], 3, new_hashed_pw)
+                        st.success(f"{selected_user['name']}님의 비밀번호가 아이디와 동일하게 초기화되었습니다.")
+            else:
+                st.warning("검색 결과가 없습니다.")
+        elif len(search_kw) == 1:
+            st.warning("최소 2글자 이상 입력해주세요.")
+
+        st.write("---")
+        if st.button("뒤로가기"):
+            st.session_state['page'] = 'admin_dashboard'
+            st.rerun()
 
     # ------------------ 입고/수령 상황판 (의뢰자용) ------------------
     elif st.session_state['page'] == 'inbound_outbound':
@@ -702,7 +921,7 @@ else:
                     st.session_state.confirm_delete = False
                     dialog_status_check(row_data, sheet_row_idx)
         with c3:
-            pass # 여백
+            pass 
 
         st.write("")
         col_btn1, col_btn2 = st.columns([1, 4])
@@ -771,8 +990,7 @@ else:
                             
                             get_cached_board_data.clear() 
                             st.success("입고 생성 완료!")
-                            time.sleep(1) # 메시지 증발 방지
-                            
+                            time.sleep(1)
                             st.session_state['page'] = 'inbound_outbound'
                             st.rerun()
                         except Exception as e:
