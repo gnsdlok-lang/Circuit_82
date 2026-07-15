@@ -202,7 +202,14 @@ def dialog_confirm_inbound(row_data, sheet_row_idx):
             row_idx = get_exact_row_idx(board_sheet, row_data, sheet_row_idx)
             current_status = board_sheet.cell(row_idx, 7).value
             if str(current_status).strip() == '1':
-                board_sheet.update_cell(row_idx, 7, 2)
+                current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+                # 5열: 의뢰자 기록, 7열: 상태 2로 변경, 8열: 입고일자 기록
+                cells_to_update = [
+                    Cell(row=row_idx, col=5, value=st.session_state.get('user_name', '알수없음')),
+                    Cell(row=row_idx, col=7, value=2),
+                    Cell(row=row_idx, col=8, value=current_time_str)
+                ]
+                board_sheet.update_cells(cells_to_update)
                 get_cached_board_data.clear() 
                 st.success("입고 처리 완료!")
                 time.sleep(1)
@@ -1259,12 +1266,12 @@ else:
 
                             req_date_str = req_date.strftime("%Y-%m-%d")
                             req_datetime_str = f"{req_date_str} 13:00"
-                            current_time_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
 
+                            # 5열(의뢰자)과 8열(입고일자) 데이터는 빈 문자열로 삽입합니다.
                             new_row = [
                                 next_seq, selected_factory, selected_dept, item_name.strip(),
-                                st.session_state.get('user_name', ''), serial_num.strip(), 1,
-                                current_time_str, req_datetime_str, "", "", "", "", "", "",
+                                "", serial_num.strip(), 1,
+                                "", req_datetime_str, "", "", "", "", "", "",
                                 str(uuid.uuid4())
                             ]
                             board_sheet.append_row(new_row)
