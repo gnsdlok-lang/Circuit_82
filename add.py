@@ -146,6 +146,22 @@ def dialog_completed_detail(row_data):
     if st.button("닫기", use_container_width=True):
         st.rerun()
 
+@st.dialog("완료기록 삭제")
+def dialog_delete_completed(row_data, sheet_row_idx):
+    st.warning("정말 해당 행을 삭제하시겠습니까? (이 작업은 되돌릴 수 없습니다)")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("최종 삭제", use_container_width=True, type="primary"):
+            completed_sheet = get_worksheet("완료기록")
+            completed_sheet.delete_rows(sheet_row_idx)
+            get_cached_completed_data.clear()
+            st.success("행 삭제 완료!")
+            time.sleep(1)
+            st.rerun()
+    with col2:
+        if st.button("취소", use_container_width=True):
+            st.rerun()
+
 @st.dialog("비밀번호 최종 확인")
 def confirm_password_change(new_pw):
     st.write("정말 비밀번호를 변경하시겠습니까?")
@@ -229,6 +245,89 @@ def dialog_confirm_receipt(row_data, sheet_row_idx):
     with col2:
         if st.button("취소", use_container_width=True):
             st.rerun()
+
+@st.dialog("입고/수령 취소")
+def dialog_cancel_inbound_receipt(row_data, sheet_row_idx):
+    st.write("취소할 작업을 선택해주세요.")
+    status = str(row_data[6]).strip() if len(row_data) > 6 else ""
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("입고 취소", use_container_width=True, disabled=(status != '2'), type="primary"):
+            board_sheet = get_worksheet("상황판")
+            row_idx = get_exact_row_idx(board_sheet, row_data, sheet_row_idx)
+            # 상태를 1로 변경, 5열(의뢰자)과 8열(입고일자) 데이터 삭제
+            cells = [
+                Cell(row=row_idx, col=7, value=1),
+                Cell(row=row_idx, col=5, value=""),
+                Cell(row=row_idx, col=8, value="")
+            ]
+            board_sheet.update_cells(cells)
+            get_cached_board_data.clear()
+            st.success("입고 취소 완료!")
+            time.sleep(1)
+            st.rerun()
+
+    with col2:
+        if st.button("수령 취소", use_container_width=True, disabled=(status != '5'), type="primary"):
+            board_sheet = get_worksheet("상황판")
+            row_idx = get_exact_row_idx(board_sheet, row_data, sheet_row_idx)
+            # 상태를 4로 변경, 12열(수령일자)과 15열(수령 담당자) 데이터 삭제
+            cells = [
+                Cell(row=row_idx, col=7, value=4),
+                Cell(row=row_idx, col=12, value=""),
+                Cell(row=row_idx, col=15, value="")
+            ]
+            board_sheet.update_cells(cells)
+            get_cached_board_data.clear()
+            st.success("수령 취소 완료!")
+            time.sleep(1)
+            st.rerun()
+
+    st.write("---")
+    if st.button("닫기", use_container_width=True):
+        st.rerun()
+
+@st.dialog("시작/종료 취소")
+def dialog_cancel_start_end(row_data, sheet_row_idx):
+    st.write("취소할 작업을 선택해주세요.")
+    status = str(row_data[6]).strip() if len(row_data) > 6 else ""
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("시작취소", use_container_width=True, disabled=(status != '3'), type="primary"):
+            board_sheet = get_worksheet("상황판")
+            row_idx = get_exact_row_idx(board_sheet, row_data, sheet_row_idx)
+            # 상태를 2로 변경, 10열(작업시작시간), 13열(시작 담당자) 데이터 삭제
+            cells = [
+                Cell(row=row_idx, col=7, value=2),
+                Cell(row=row_idx, col=10, value=""),
+                Cell(row=row_idx, col=13, value="")
+            ]
+            board_sheet.update_cells(cells)
+            get_cached_board_data.clear()
+            st.success("작업 시작 취소 완료!")
+            time.sleep(1)
+            st.rerun()
+    with col2:
+        if st.button("종료취소", use_container_width=True, disabled=(status != '4'), type="primary"):
+            board_sheet = get_worksheet("상황판")
+            row_idx = get_exact_row_idx(board_sheet, row_data, sheet_row_idx)
+            # 상태를 3으로 변경, 11열(작업종료시간), 14열(종료 담당자) 데이터 삭제
+            cells = [
+                Cell(row=row_idx, col=7, value=3),
+                Cell(row=row_idx, col=11, value=""),
+                Cell(row=row_idx, col=14, value="")
+            ]
+            board_sheet.update_cells(cells)
+            get_cached_board_data.clear()
+            st.success("작업 종료 취소 완료!")
+            time.sleep(1)
+            st.rerun()
+            
+    st.write("---")
+    if st.button("닫기", use_container_width=True):
+        st.rerun()
 
 @st.dialog("상태 확인")
 def dialog_status_check(row_data, sheet_row_idx):
@@ -671,7 +770,7 @@ else:
             
         st.write("---")
         
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         with c1:
             if st.button("상세보기", use_container_width=True, type="primary"):
                 if len(selected_indices) == 0:
@@ -682,6 +781,15 @@ else:
                     row_data = raw_completed[sheet_row_idx - 1]
                     dialog_completed_detail(row_data)
         with c2:
+            if st.button("행삭제", use_container_width=True):
+                if len(selected_indices) == 0:
+                    st.warning("표에서 항목을 먼저 선택하세요.")
+                else:
+                    actual_row = df.iloc[selected_indices[0]]
+                    sheet_row_idx = int(actual_row['sheet_row_idx'])
+                    row_data = raw_completed[sheet_row_idx - 1]
+                    dialog_delete_completed(row_data, sheet_row_idx)
+        with c3:
             if st.button("뒤로가기", use_container_width=True):
                 st.session_state['page'] = 'admin_dashboard'
                 st.rerun()
@@ -929,7 +1037,7 @@ else:
             
         st.write("---")
         
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c2, c3, c4, c5 = st.columns(5)
         
         with c1:
             if st.button("입고생성", use_container_width=True):
@@ -978,6 +1086,17 @@ else:
                     
                     row_data = raw_data[sheet_row_idx - 1]
                     dialog_status_check(row_data, sheet_row_idx)
+
+        with c5:
+            if st.button("입고/수령 취소", use_container_width=True):
+                if len(selected_indices) == 0:
+                    st.warning("표에서 항목을 먼저 선택하세요.")
+                else:
+                    actual_row = df.iloc[selected_indices[0]]
+                    sheet_row_idx = int(actual_row['sheet_row_idx'])
+                    
+                    row_data = raw_data[sheet_row_idx - 1]
+                    dialog_cancel_inbound_receipt(row_data, sheet_row_idx)
 
         st.write("")
         col_btn1, col_btn2 = st.columns([1, 4])
@@ -1076,7 +1195,14 @@ else:
                     st.session_state.confirm_delete = False
                     dialog_status_check(row_data, sheet_row_idx)
         with c3:
-            pass 
+            if st.button("시작/종료 취소", use_container_width=True):
+                if len(selected_indices) == 0:
+                    st.warning("표에서 항목을 먼저 선택하세요.")
+                else:
+                    actual_row = df.iloc[selected_indices[0]]
+                    sheet_row_idx = int(actual_row['sheet_row_idx'])
+                    row_data = raw_data[sheet_row_idx - 1]
+                    dialog_cancel_start_end(row_data, sheet_row_idx)
 
         st.write("")
         col_btn1, col_btn2 = st.columns([1, 4])
@@ -1176,3 +1302,7 @@ else:
             if st.button("취소", use_container_width=True):
                 st.session_state['page'] = 'main'
                 st.rerun()
+                
+    # 관리자(권한 레벨 3)일 경우 화면 최하단에 유지보수 담당자 정보 표시
+    if st.session_state.get('user_level') == "3":
+        st.markdown("<br><br><br><div style='text-align: center; color: #C0C0C0; font-size: 13px;'>유지보수 담당자 : 김세훈</div>", unsafe_allow_html=True)
